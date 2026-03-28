@@ -252,8 +252,15 @@ function registerHandlers(mainWindow) {
     const vaultPath = fileSystem.getVaultPath();
     if (!vaultPath) throw new Error('No vault configured.');
 
+    await claudeBridge.stopSession();
     wireClaudeResponse();
-    await claudeBridge.startSession(vaultPath, null, sessionId);
+
+    let agentContext = null;
+    if (activeAgent && activeAgent.content) {
+      agentContext = activeAgent.content;
+    }
+
+    await claudeBridge.startSession(vaultPath, agentContext, sessionId);
     return true;
   });
 

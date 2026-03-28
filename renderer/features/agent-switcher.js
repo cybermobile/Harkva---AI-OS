@@ -45,7 +45,7 @@ function flashError(message) {
  */
 function applyAgentUI(name) {
   if (chatAgentName) chatAgentName.textContent = name;
-  if (statusAgent) statusAgent.textContent = name;
+  if (statusAgent) statusAgent.textContent = 'Agent: ' + name;
   if (chatInput) chatInput.placeholder = `Message ${name}...`;
 }
 

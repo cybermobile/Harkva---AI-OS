@@ -109,7 +109,10 @@
     <div class="overlay-content">
       <div class="overlay-header">
         <h3>Cron Jobs</h3>
-        <button id="cron-close" class="close-btn">&times;</button>
+        <div style="display:flex;gap:4px">
+          <button id="cron-refresh" class="header-btn" title="Refresh">Refresh</button>
+          <button id="cron-close" class="close-btn">&times;</button>
+        </div>
       </div>
       <div id="cron-list" class="overlay-body"></div>
     </div>
