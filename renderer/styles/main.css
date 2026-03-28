@@ -189,10 +189,79 @@ body {
 }
 
 /* ----- Specific Panel Sizes ----- */
-#file-browser-panel {
+#file-browser-panel,
+#sessions-panel {
   width: 250px;
   min-width: 180px;
   border-right: 1px solid var(--border);
+}
+
+/* ─── Sessions Panel ───────────────────────────────── */
+
+.session-row {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.session-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.session-row.selected {
+  background: var(--bg-tertiary);
+  border-left-color: var(--accent);
+}
+
+.session-row-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.session-prompt {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.session-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.session-row-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.session-msgs {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.session-branch {
+  font-size: 11px;
+  color: var(--accent);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.sessions-empty,
+.sessions-loading {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 #editor-panel {
@@ -237,7 +306,8 @@ body {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.header-btn:hover {
+.header-btn:hover,
+.header-btn.active {
   background: var(--accent);
   color: #fff;
 }
@@ -926,4 +996,91 @@ body {
 
 #status-connection.connected {
   color: var(--success);
+}
+
+/* ============================================================
+   Slash Command Menu
+   ============================================================ */
+.slash-menu {
+  position: fixed;
+  z-index: 2000;
+  width: 220px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(61, 43, 31, 0.15);
+  padding: 4px;
+}
+
+.slash-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.slash-item:hover,
+.slash-item.active {
+  background: var(--bg-tertiary);
+}
+
+.slash-icon {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.slash-label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   AI Activity Glow
+   ============================================================ */
+@keyframes ai-glow-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 8px rgba(232, 115, 26, 0.3),
+                inset 0 0 20px rgba(245, 166, 35, 0.1);
+  }
+  50% {
+    box-shadow: inset 0 0 15px rgba(232, 115, 26, 0.5),
+                inset 0 0 40px rgba(245, 166, 35, 0.15);
+  }
+}
+
+body.ai-active {
+  animation: ai-glow-pulse 2s ease-in-out infinite;
+}
+
+body.ai-active::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  border: 2px solid var(--accent);
+  border-radius: 0;
+  opacity: 0.6;
+  animation: ai-border-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ai-border-pulse {
+  0%, 100% { opacity: 0.3; border-color: var(--accent); }
+  50% { opacity: 0.7; border-color: var(--accent-light); }
 }

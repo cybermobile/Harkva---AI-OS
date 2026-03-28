@@ -61,6 +61,14 @@ function buildMenu() {
       label: 'File',
       submenu: [
         {
+          label: 'New File\u2026',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => {
+            if (mainWindow) mainWindow.webContents.send('show-new-file');
+          },
+        },
+        { type: 'separator' },
+        {
           label: 'Change Vault Folder\u2026',
           accelerator: 'CmdOrCtrl+O',
           click: async () => {

@@ -201,8 +201,9 @@ function spawnForMessage(text) {
  * Start a new Claude session.
  * @param {string} vault - Working directory for the session
  * @param {string} [context] - Optional agent personality/context to prepend
+ * @param {string} [resumeId] - Optional session ID to resume
  */
-function startSession(vault, context) {
+function startSession(vault, context, resumeId) {
   return new Promise(async (resolve) => {
     if (activeProcess) {
       await stopSession();
@@ -210,7 +211,7 @@ function startSession(vault, context) {
 
     vaultPath = vault;
     agentContext = context || null;
-    sessionId = null;
+    sessionId = resumeId || null;
 
     emitter.emit('ready');
     resolve();

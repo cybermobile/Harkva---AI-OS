@@ -204,6 +204,9 @@ function handleClaudeResponse(data) {
       if (btnSend) btnSend.disabled = false;
       if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
 
+      // Stop AI glow
+      document.body.classList.remove('ai-active');
+
       // Finalise the message
       if (currentAssistantText) {
         messages.push({ role: 'assistant', content: currentAssistantText });
@@ -222,6 +225,9 @@ function handleClaudeResponse(data) {
     }
 
     case 'tool_use': {
+      // Activate AI glow while using tools
+      document.body.classList.add('ai-active');
+
       // Show tool call with its inputs
       removeTypingIndicator();
       const toolBubble = document.createElement('div');
@@ -249,6 +255,7 @@ function handleClaudeResponse(data) {
       isWaiting = false;
       if (btnSend) btnSend.disabled = false;
       if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
+      document.body.classList.remove('ai-active');
 
       const errorBubble = createBubble('error', data.content || 'An error occurred.');
       messagesContainer.appendChild(errorBubble);
@@ -269,6 +276,11 @@ async function handleNewChat() {
   currentAssistantBubble = null;
   currentAssistantText = '';
   isWaiting = false;
+
+  if (btnSend) btnSend.disabled = false;
+  if (chatInput) {
+    chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
+  }
 
   if (messagesContainer) {
     messagesContainer.innerHTML = '';
@@ -361,6 +373,27 @@ export function init() {
       isWaiting = false;
       if (messagesContainer) messagesContainer.innerHTML = '';
     }
+  });
+
+  // Load a past session's messages into the chat
+  window.addEventListener('session-loaded', (event) => {
+    const { messages: sessionMessages } = event.detail || {};
+    if (!sessionMessages || !sessionMessages.length) return;
+
+    // Clear current chat
+    messages = [];
+    currentAssistantBubble = null;
+    currentAssistantText = '';
+    isWaiting = false;
+    if (messagesContainer) messagesContainer.innerHTML = '';
+
+    // Render each historical message
+    for (const msg of sessionMessages) {
+      messages.push(msg);
+      const bubble = createBubble(msg.role, msg.content);
+      messagesContainer.appendChild(bubble);
+    }
+    scrollToBottom();
   });
 
   // Enter sends, Shift+Enter adds a newline

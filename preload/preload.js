@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('harkva', {
   listDir: (relativePath) => ipcRenderer.invoke('list-dir', relativePath),
   readFile: (relativePath) => ipcRenderer.invoke('read-file', relativePath),
   writeFile: (relativePath, content) => ipcRenderer.invoke('write-file', relativePath, content),
+  createFile: (relativePath, title) => ipcRenderer.invoke('create-file', relativePath, title),
+  openFile: (relativePath) => ipcRenderer.invoke('open-file', relativePath),
 
   // Claude
   startClaude: () => ipcRenderer.invoke('claude-start'),
@@ -27,6 +29,12 @@ contextBridge.exposeInMainWorld('harkva', {
   // Menu events
   onVaultChanged: (cb) => ipcRenderer.on('vault-changed', (_event, path) => cb(path)),
   onShowCreateAgent: (cb) => ipcRenderer.on('show-create-agent', () => cb()),
+  onShowNewFile: (cb) => ipcRenderer.on('show-new-file', () => cb()),
+
+  // Sessions
+  listSessions: () => ipcRenderer.invoke('list-sessions'),
+  loadSession: (sessionId) => ipcRenderer.invoke('load-session', sessionId),
+  resumeSession: (sessionId) => ipcRenderer.invoke('resume-session', sessionId),
 
   // Cron
   listCronJobs: () => ipcRenderer.invoke('list-cron-jobs'),

@@ -12,6 +12,7 @@ import { init as initChat } from './panels/chat.js';
 import { init as initVoiceMode } from './features/voice-mode.js';
 import { init as initAgentSwitcher } from './features/agent-switcher.js';
 import { init as initCronPanel } from './features/cron-panel.js';
+import { init as initSessions, show as showSessions } from './panels/sessions.js';
 
 // ─── Panel Resizers ────────────────────────────────────────────────────────
 
@@ -93,25 +94,26 @@ function setupKeyboardShortcuts() {
 function setupTabs() {
   const tabs = document.querySelectorAll('.tab-btn');
   const fileBrowserPanel = document.getElementById('file-browser-panel');
+  const sessionsPanel = document.getElementById('sessions-panel');
   const editorPanel = document.getElementById('editor-panel');
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.tab;
 
-      if (target === 'sessions') {
-        // Sessions view not yet implemented — show feedback
-        tab.textContent = 'Sessions (coming soon)';
-        setTimeout(() => { tab.textContent = 'Sessions'; }, 2000);
-        return;
-      }
-
       tabs.forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
 
-      // Show/hide panels based on active tab
-      if (fileBrowserPanel) fileBrowserPanel.style.display = target === 'files' ? '' : 'none';
-      if (editorPanel) editorPanel.style.display = target === 'files' ? '' : 'none';
+      if (target === 'files') {
+        if (fileBrowserPanel) fileBrowserPanel.style.display = '';
+        if (sessionsPanel) sessionsPanel.style.display = 'none';
+        if (editorPanel) editorPanel.style.display = '';
+      } else if (target === 'sessions') {
+        if (fileBrowserPanel) fileBrowserPanel.style.display = 'none';
+        if (sessionsPanel) sessionsPanel.style.display = '';
+        if (editorPanel) editorPanel.style.display = '';
+        showSessions();
+      }
     });
   });
 }
@@ -155,6 +157,13 @@ function setupMenuListeners() {
   // Create Agent dialog triggered from native menu
   if (typeof window.harkva.onShowCreateAgent === 'function') {
     window.harkva.onShowCreateAgent(() => showCreateAgentDialog());
+  }
+
+  // New File dialog triggered from native menu
+  if (typeof window.harkva.onShowNewFile === 'function') {
+    window.harkva.onShowNewFile(() => {
+      window.dispatchEvent(new CustomEvent('show-new-file-dialog'));
+    });
   }
 }
 
@@ -274,6 +283,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 8. Init cron panel
   initCronPanel();
+
+  // 8b. Init sessions panel
+  initSessions('sessions-list');
 
   // 9. Set up panel resizers
   setupResizers();

@@ -6,6 +6,8 @@
  * a rendered markdown view mode and a raw-text edit mode with save support.
  */
 
+import { attach as attachSlashCommands, detach as detachSlashCommands } from '../features/slash-commands.js';
+
 let currentPath = null;
 let currentContent = '';
 let isEditing = false;
@@ -20,6 +22,16 @@ let btnSave = null;
 /** File extensions treated as markdown. */
 const MD_EXTENSIONS = new Set(['.md', '.markdown', '.mdown', '.mkd', '.mdx']);
 
+/** Office file extensions that need special handling. */
+const OFFICE_EXTENSIONS = {
+  '.docx': { label: 'Word Document', icon: '📄', color: '#2B579A' },
+  '.xlsx': { label: 'Excel Spreadsheet', icon: '📊', color: '#217346' },
+  '.pptx': { label: 'PowerPoint Presentation', icon: '📽', color: '#D24726' },
+  '.doc':  { label: 'Word Document', icon: '📄', color: '#2B579A' },
+  '.xls':  { label: 'Excel Spreadsheet', icon: '📊', color: '#217346' },
+  '.ppt':  { label: 'PowerPoint Presentation', icon: '📽', color: '#D24726' },
+};
+
 /**
  * Determine whether a file path points to a markdown file.
  */
@@ -27,6 +39,15 @@ function isMarkdownFile(path) {
   const dot = path.lastIndexOf('.');
   if (dot === -1) return false;
   return MD_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
+/**
+ * Get office file info if applicable, or null.
+ */
+function getOfficeInfo(path) {
+  const dot = path.lastIndexOf('.');
+  if (dot === -1) return null;
+  return OFFICE_EXTENSIONS[path.slice(dot).toLowerCase()] || null;
 }
 
 /**
@@ -58,6 +79,7 @@ function renderContent(content, path) {
  */
 function enterViewMode() {
   isEditing = false;
+  detachSlashCommands();
   markdownEdit.style.display = 'none';
   markdownView.style.display = '';
   btnEdit.style.display = '';
@@ -75,6 +97,7 @@ function enterEditMode() {
   markdownView.style.display = 'none';
   btnEdit.style.display = 'none';
   btnSave.style.display = '';
+  attachSlashCommands(markdownEdit);
   markdownEdit.focus();
 }
 
@@ -106,9 +129,34 @@ async function loadFile(path, name) {
 
   // Reset to view mode
   isEditing = false;
+  detachSlashCommands();
   markdownEdit.style.display = 'none';
   markdownView.style.display = '';
   btnSave.style.display = 'none';
+
+  // Check if this is an Office file
+  const officeInfo = getOfficeInfo(path);
+  if (officeInfo) {
+    currentContent = '';
+    btnEdit.style.display = 'none';
+    markdownView.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'office-preview';
+    card.innerHTML = `
+      <div class="office-icon" style="color:${officeInfo.color}">${officeInfo.icon}</div>
+      <div class="office-name">${escapeHtml(name || path)}</div>
+      <div class="office-type">${officeInfo.label}</div>
+      <button class="office-open-btn" style="background:${officeInfo.color}">Open in App</button>
+    `;
+    card.querySelector('.office-open-btn').addEventListener('click', () => {
+      if (window.harkva && typeof window.harkva.openFile === 'function') {
+        window.harkva.openFile(path);
+      }
+    });
+    markdownView.appendChild(card);
+    return;
+  }
 
   try {
     if (window.harkva && typeof window.harkva.readFile === 'function') {
@@ -125,6 +173,12 @@ async function loadFile(path, name) {
     markdownView.innerHTML = `<p style="color: var(--error)">Failed to load file.</p>`;
     btnEdit.style.display = 'none';
   }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 /**

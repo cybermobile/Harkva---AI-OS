@@ -43,9 +43,20 @@
     <div id="file-browser-panel" class="panel">
       <div class="panel-header">
         <span>Files</span>
-        <button id="btn-change-vault" class="header-btn" title="Change vault folder">Vault</button>
+        <div style="display:flex;gap:4px">
+          <button id="btn-new-file" class="header-btn" title="Create new file">+ New</button>
+          <button id="btn-change-vault" class="header-btn" title="Change vault folder">Vault</button>
+        </div>
       </div>
       <div id="file-tree" class="panel-body"></div>
+    </div>
+
+    <!-- Left panel: Sessions (hidden by default) -->
+    <div id="sessions-panel" class="panel" style="display:none">
+      <div class="panel-header">
+        <span>Sessions</span>
+      </div>
+      <div id="sessions-list" class="panel-body"></div>
     </div>
 
     <!-- Resizer -->
