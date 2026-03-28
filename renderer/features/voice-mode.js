@@ -248,11 +248,27 @@ function createRecognition() {
 
   rec.addEventListener('error', (event) => {
     console.warn('[voice-mode] Recognition error:', event.error);
-    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-      showTemporaryStatus('Microphone permission denied');
-      deactivateVoice();
+    switch (event.error) {
+      case 'not-allowed':
+      case 'service-not-allowed':
+        showTemporaryStatus('Microphone permission denied');
+        deactivateVoice();
+        break;
+      case 'network':
+        showTemporaryStatus('Speech service unreachable — check network');
+        break;
+      case 'no-speech':
+        showTemporaryStatus('No speech detected — try again');
+        break;
+      case 'audio-capture':
+        showTemporaryStatus('No microphone found');
+        deactivateVoice();
+        break;
+      default:
+        showTemporaryStatus('Voice error: ' + event.error);
+        break;
     }
-    // For transient errors (network, audio-capture) the 'end' handler will restart
+    // For transient errors (network, no-speech) the 'end' handler will restart
   });
 
   return rec;
