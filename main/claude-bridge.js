@@ -1,16 +1,70 @@
 'use strict';
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const { EventEmitter } = require('events');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 
 const emitter = new EventEmitter();
-let claudeProcess = null;
+let activeProcess = null;
+let sessionId = null;
+let vaultPath = null;
+let stoppingIntentionally = false;
+let agentContext = null;
 let stdoutBuffer = '';
 let responseCallbacks = [];
+let seenAssistantText = false;
 
 /**
- * Parse a JSON line from the Claude CLI stream-json output
- * and emit structured response events.
+ * Resolve the full path to the `claude` binary.
+ * Electron GUI apps don't inherit the user's shell PATH, so we check
+ * common install locations and also try to read the login shell's PATH.
+ */
+function resolveClaudeBinary() {
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, '.local', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+    path.join(home, '.npm-global', 'bin', 'claude'),
+    '/opt/homebrew/bin/claude',
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch (_) {
+      // not found or not executable
+    }
+  }
+
+  // Fallback: ask the user's login shell for the full PATH
+  try {
+    const shell = process.env.SHELL || '/bin/zsh';
+    const resolved = execSync(`${shell} -l -c 'which claude'`, {
+      encoding: 'utf-8',
+      timeout: 5000,
+    }).trim();
+    if (resolved && fs.existsSync(resolved)) return resolved;
+  } catch (_) {
+    // shell lookup failed
+  }
+
+  return 'claude';
+}
+
+function emitResponse(data) {
+  console.log('[claude-bridge] emitResponse:', data.type, data.content ? data.content.slice(0, 80) : '');
+  console.log('[claude-bridge] responseCallbacks count:', responseCallbacks.length);
+  emitter.emit('response', data);
+  for (const cb of responseCallbacks) {
+    cb(data);
+  }
+}
+
+/**
+ * Parse a JSON line from the Claude CLI stream-json output.
  */
 function handleJsonLine(line) {
   const trimmed = line.trim();
@@ -20,13 +74,16 @@ function handleJsonLine(line) {
   try {
     parsed = JSON.parse(trimmed);
   } catch (_) {
-    // Not valid JSON, ignore
     return;
   }
 
-  // The stream-json format emits objects with a type field.
-  // assistant messages contain content blocks.
+  // Capture session_id for --resume on subsequent messages
+  if (parsed.session_id && !sessionId) {
+    sessionId = parsed.session_id;
+  }
+
   if (parsed.type === 'assistant' && parsed.message && parsed.message.content) {
+    seenAssistantText = true;
     for (const block of parsed.message.content) {
       if (block.type === 'text') {
         emitResponse({ type: 'text', content: block.text });
@@ -38,10 +95,13 @@ function handleJsonLine(line) {
       }
     }
   } else if (parsed.type === 'result') {
-    // Final result message
-    if (parsed.result) {
+    // Only emit result text if we didn't already get it from the assistant message
+    if (parsed.result && !parsed.is_error && !seenAssistantText) {
       emitResponse({ type: 'text', content: parsed.result });
+    } else if (parsed.is_error) {
+      emitResponse({ type: 'error', content: parsed.result || 'Unknown error' });
     }
+    seenAssistantText = false;
     emitResponse({ type: 'done', content: '' });
   } else if (parsed.type === 'error') {
     emitResponse({
@@ -49,145 +109,152 @@ function handleJsonLine(line) {
       content: parsed.error || parsed.message || 'Unknown error from Claude CLI',
     });
   } else if (parsed.type === 'system') {
-    // System messages (session info, etc.) -- can be used for ready signal
     emitter.emit('system', parsed);
   }
 }
 
-function emitResponse(data) {
-  emitter.emit('response', data);
-  for (const cb of responseCallbacks) {
-    cb(data);
+/**
+ * Spawn a single --print process for one message exchange.
+ * Uses --resume to continue the session if we have a session_id.
+ */
+function spawnForMessage(text) {
+  const claudeBin = resolveClaudeBinary();
+  const args = [
+    '--print',
+    '--output-format', 'stream-json',
+    '--verbose',
+  ];
+
+  // Continue existing conversation if we have a session
+  if (sessionId) {
+    args.push('--resume', sessionId);
   }
-}
 
-/**
- * Start a new Claude CLI session.
- * @param {string} vaultPath - Working directory for the session
- * @param {string} [agentContext] - Optional agent personality/context to send as first message
- */
-function startSession(vaultPath, agentContext) {
-  return new Promise((resolve, reject) => {
-    if (claudeProcess) {
-      stopSession().then(() => {
-        doStart(vaultPath, agentContext).then(resolve, reject);
-      });
-    } else {
-      doStart(vaultPath, agentContext).then(resolve, reject);
+  // Pass message as the prompt argument
+  args.push('--', text);
+
+  stdoutBuffer = '';
+
+  // Strip ELECTRON_RUN_AS_NODE so the claude subprocess initialises normally
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+
+  console.log('[claude-bridge] Spawning:', claudeBin, args.join(' '));
+
+  const proc = spawn(claudeBin, args, {
+    cwd: vaultPath,
+    env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  activeProcess = proc;
+
+  proc.stdout.on('data', (chunk) => {
+    stdoutBuffer += chunk.toString();
+    const lines = stdoutBuffer.split('\n');
+    stdoutBuffer = lines.pop() || '';
+    for (const line of lines) {
+      handleJsonLine(line);
     }
   });
-}
 
-function doStart(vaultPath, agentContext) {
-  return new Promise((resolve, reject) => {
-    stdoutBuffer = '';
-
-    try {
-      claudeProcess = spawn('claude', ['--chat', '--output-format', 'stream-json'], {
-        cwd: vaultPath,
-        env: { ...process.env },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-    } catch (err) {
-      emitResponse({
-        type: 'error',
-        content: 'Failed to start Claude CLI. Please ensure Claude Code is installed and available in your PATH. Install it from https://docs.anthropic.com/en/docs/claude-code',
-      });
-      reject(err);
-      return;
+  proc.stderr.on('data', (chunk) => {
+    const text = chunk.toString().trim();
+    if (text) {
+      console.error('[claude-bridge stderr]', text);
     }
-
-    claudeProcess.on('error', (err) => {
-      emitResponse({
-        type: 'error',
-        content: `Claude CLI not found. Please install Claude Code and ensure the 'claude' command is available in your PATH. Install from https://docs.anthropic.com/en/docs/claude-code\n\nError: ${err.message}`,
-      });
-      claudeProcess = null;
-      reject(err);
-    });
-
-    claudeProcess.stdout.on('data', (chunk) => {
-      stdoutBuffer += chunk.toString();
-
-      const lines = stdoutBuffer.split('\n');
-      // Keep the last partial line in the buffer
-      stdoutBuffer = lines.pop() || '';
-
-      for (const line of lines) {
-        handleJsonLine(line);
-      }
-    });
-
-    claudeProcess.stderr.on('data', (chunk) => {
-      const text = chunk.toString().trim();
-      if (text) {
-        console.error('[claude-bridge stderr]', text);
-      }
-    });
-
-    claudeProcess.on('exit', (code, signal) => {
-      if (code !== 0 && code !== null) {
-        emitResponse({
-          type: 'error',
-          content: `Claude CLI exited with code ${code}`,
-        });
-      }
-      claudeProcess = null;
-      stdoutBuffer = '';
-    });
-
-    // Give the process a moment to start, then consider it ready
-    // If there's an agent context, send it as the first message
-    setTimeout(() => {
-      if (claudeProcess && !claudeProcess.killed) {
-        emitter.emit('ready');
-        if (agentContext) {
-          sendMessage(agentContext);
-        }
-        resolve();
-      }
-    }, 500);
   });
-}
 
-/**
- * Send a message to the Claude CLI subprocess.
- * @param {string} text - The message to send
- */
-function sendMessage(text) {
-  if (!claudeProcess || claudeProcess.killed) {
+  proc.on('error', (err) => {
     emitResponse({
       type: 'error',
-      content: 'Claude session is not running. Please start a session first.',
+      content: `Claude CLI not found. Please install Claude Code and ensure the 'claude' command is available in your PATH.\n\nError: ${err.message}`,
+    });
+    activeProcess = null;
+  });
+
+  proc.on('exit', (code) => {
+    // Process any remaining buffer
+    if (stdoutBuffer.trim()) {
+      handleJsonLine(stdoutBuffer);
+      stdoutBuffer = '';
+    }
+    if (code !== 0 && code !== null && !stoppingIntentionally) {
+      emitResponse({
+        type: 'error',
+        content: `Claude CLI exited with code ${code}`,
+      });
+    }
+    stoppingIntentionally = false;
+    activeProcess = null;
+  });
+}
+
+/**
+ * Start a new Claude session.
+ * @param {string} vault - Working directory for the session
+ * @param {string} [context] - Optional agent personality/context to prepend
+ */
+function startSession(vault, context) {
+  return new Promise(async (resolve) => {
+    if (activeProcess) {
+      await stopSession();
+    }
+
+    vaultPath = vault;
+    agentContext = context || null;
+    sessionId = null;
+
+    emitter.emit('ready');
+    resolve();
+  });
+}
+
+/**
+ * Send a message to Claude.
+ * Spawns a new --print process per message, using --resume for continuity.
+ */
+function sendMessage(text) {
+  if (!vaultPath) {
+    emitResponse({
+      type: 'error',
+      content: 'No vault configured. Please select a vault folder first.',
     });
     return;
   }
 
-  try {
-    claudeProcess.stdin.write(text + '\n');
-  } catch (err) {
+  if (activeProcess && !activeProcess.killed) {
     emitResponse({
       type: 'error',
-      content: `Failed to send message to Claude: ${err.message}`,
+      content: 'Claude is still processing a previous message. Please wait.',
     });
+    return;
   }
+
+  // Prepend agent context to the first message of a session
+  let fullMessage = text;
+  if (agentContext && !sessionId) {
+    fullMessage = `${agentContext}\n\n---\n\n${text}`;
+  }
+
+  spawnForMessage(fullMessage);
 }
 
 /**
- * Stop the current Claude session gracefully.
+ * Stop the current Claude process gracefully.
  */
 function stopSession() {
   return new Promise((resolve) => {
-    if (!claudeProcess) {
+    if (!activeProcess) {
       resolve();
       return;
     }
 
-    const proc = claudeProcess;
-    claudeProcess = null;
+    const proc = activeProcess;
+    activeProcess = null;
     stdoutBuffer = '';
+    stoppingIntentionally = true;
 
-    // Try SIGTERM first
     proc.kill('SIGTERM');
 
     const forceKillTimeout = setTimeout(() => {
@@ -206,26 +273,14 @@ function stopSession() {
   });
 }
 
-/**
- * Check if a Claude session is currently running.
- * @returns {boolean}
- */
 function isRunning() {
-  return claudeProcess !== null && !claudeProcess.killed;
+  return activeProcess !== null && !activeProcess.killed;
 }
 
-/**
- * Register a callback for Claude response chunks.
- * @param {function} callback - Receives {type, content} objects
- */
 function onResponse(callback) {
   responseCallbacks.push(callback);
 }
 
-/**
- * Remove a previously registered response callback.
- * @param {function} callback
- */
 function removeResponseCallback(callback) {
   responseCallbacks = responseCallbacks.filter((cb) => cb !== callback);
 }

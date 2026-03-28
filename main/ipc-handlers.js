@@ -2,7 +2,13 @@
 
 const { ipcMain, dialog } = require('electron');
 const path = require('path');
+const fsSync = require('fs');
 const fileSystem = require('./file-system');
+
+function debugLog(...args) {
+  const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  fsSync.appendFileSync('/tmp/harkva-ipc.log', `[${new Date().toISOString()}] ${msg}\n`);
+}
 const claudeBridge = require('./claude-bridge');
 const cronManager = require('./cron-manager');
 
@@ -71,6 +77,7 @@ function registerHandlers(mainWindow) {
 
   ipcMain.handle('claude-start', async () => {
     const vaultPath = fileSystem.getVaultPath();
+    debugLog('claude-start called, vaultPath:', vaultPath);
     if (!vaultPath) {
       throw new Error('No vault configured. Please select a vault folder first.');
     }
@@ -83,10 +90,12 @@ function registerHandlers(mainWindow) {
     }
 
     await claudeBridge.startSession(vaultPath, agentContext);
+    debugLog('claude-start session started');
     return true;
   });
 
   ipcMain.handle('claude-send', async (_event, text) => {
+    debugLog('claude-send received:', text ? text.slice(0, 80) : '(empty)');
     wireClaudeResponse();
     claudeBridge.sendMessage(text);
     return true;

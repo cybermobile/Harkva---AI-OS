@@ -4,12 +4,12 @@
   "description": "AI Operating System for knowledge workers",
   "main": "main/index.js",
   "scripts": {
-    "start": "electron .",
+    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
     "package": "electron-forge package",
     "make": "electron-forge make"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.4.11"
   },
   "dependencies": {
     "marked": "^17.0.5"

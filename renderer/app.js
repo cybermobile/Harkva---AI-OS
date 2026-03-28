@@ -92,11 +92,26 @@ function setupKeyboardShortcuts() {
 
 function setupTabs() {
   const tabs = document.querySelectorAll('.tab-btn');
+  const fileBrowserPanel = document.getElementById('file-browser-panel');
+  const editorPanel = document.getElementById('editor-panel');
+
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+
+      if (target === 'sessions') {
+        // Sessions view not yet implemented — show feedback
+        tab.textContent = 'Sessions (coming soon)';
+        setTimeout(() => { tab.textContent = 'Sessions'; }, 2000);
+        return;
+      }
+
       tabs.forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
-      // Future: switch between Files and Sessions views
+
+      // Show/hide panels based on active tab
+      if (fileBrowserPanel) fileBrowserPanel.style.display = target === 'files' ? '' : 'none';
+      if (editorPanel) editorPanel.style.display = target === 'files' ? '' : 'none';
     });
   });
 }
@@ -121,6 +136,110 @@ function updateStatusBar(vaultPath) {
     statusConnection.textContent = 'Connected';
     statusConnection.className = 'status-connected';
   }
+}
+
+// ─── Menu Event Handlers ──────────────────────────────────────────────────
+
+function setupMenuListeners() {
+  if (!window.harkva) return;
+
+  // Vault changed from native menu
+  if (typeof window.harkva.onVaultChanged === 'function') {
+    window.harkva.onVaultChanged(async (newPath) => {
+      updateStatusBar(newPath);
+      await initFileBrowser('file-tree');
+      window.dispatchEvent(new CustomEvent('agents-updated'));
+    });
+  }
+
+  // Create Agent dialog triggered from native menu
+  if (typeof window.harkva.onShowCreateAgent === 'function') {
+    window.harkva.onShowCreateAgent(() => showCreateAgentDialog());
+  }
+}
+
+function showCreateAgentDialog() {
+  // Don't stack dialogs
+  if (document.getElementById('create-agent-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'create-agent-overlay';
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+
+  overlay.innerHTML = `
+    <div class="overlay-content" style="width:480px">
+      <div class="overlay-header">
+        <h3>Create New Agent</h3>
+        <button class="close-btn" id="agent-dialog-close">&times;</button>
+      </div>
+      <div class="overlay-body" style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Agent Name</label>
+          <input id="agent-name-input" type="text" placeholder="e.g. Research Assistant"
+            style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+            background:var(--bg-primary);color:var(--text-primary);font-size:14px;outline:none;
+            font-family:inherit" />
+        </div>
+        <div style="flex:1">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">System Prompt</label>
+          <textarea id="agent-prompt-input" rows="8"
+            placeholder="Describe this agent's personality, expertise, and how it should respond..."
+            style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+            background:var(--bg-primary);color:var(--text-primary);font-size:14px;outline:none;
+            font-family:inherit;resize:vertical;line-height:1.5"></textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <button id="agent-dialog-cancel" class="header-btn">Cancel</button>
+          <button id="agent-dialog-create" class="header-btn"
+            style="background:var(--accent);color:#fff">Create Agent</button>
+        </div>
+        <div id="agent-dialog-error" style="color:var(--error);font-size:13px;display:none"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const nameInput = document.getElementById('agent-name-input');
+  const promptInput = document.getElementById('agent-prompt-input');
+  const errorEl = document.getElementById('agent-dialog-error');
+
+  function close() { overlay.remove(); }
+
+  document.getElementById('agent-dialog-close').addEventListener('click', close);
+  document.getElementById('agent-dialog-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  document.getElementById('agent-dialog-create').addEventListener('click', async () => {
+    const name = nameInput.value.trim();
+    const prompt = promptInput.value.trim();
+
+    if (!name) {
+      errorEl.textContent = 'Please enter a name for the agent.';
+      errorEl.style.display = 'block';
+      nameInput.focus();
+      return;
+    }
+    if (!prompt) {
+      errorEl.textContent = 'Please enter a system prompt.';
+      errorEl.style.display = 'block';
+      promptInput.focus();
+      return;
+    }
+
+    try {
+      await window.harkva.createAgent(name, prompt);
+      close();
+      // Refresh the agent dropdown
+      window.dispatchEvent(new CustomEvent('agents-updated'));
+    } catch (err) {
+      errorEl.textContent = err.message || 'Failed to create agent.';
+      errorEl.style.display = 'block';
+    }
+  });
+
+  nameInput.focus();
 }
 
 // ─── Boot Sequence ─────────────────────────────────────────────────────────
@@ -165,7 +284,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 11. Set up tab switching
   setupTabs();
 
-  // 12. Update status bar
+  // 12. Set up menu event listeners
+  setupMenuListeners();
+
+  // 13. Update status bar
   updateStatusBar(vaultPath);
 
   // 13. Start Claude session

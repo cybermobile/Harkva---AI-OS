@@ -144,11 +144,43 @@ function escapeHtml(text) {
  * Initialise the file browser panel.
  * @param {string} containerId - The ID of the container element (e.g. 'file-tree').
  */
+/**
+ * Reload the file tree from the vault root.
+ */
+async function reloadTree() {
+  if (!container) return;
+  container.innerHTML = '';
+  selectedEl = null;
+  selectedPath = null;
+  await renderTree(container, '');
+}
+
+/**
+ * Initialise the file browser panel.
+ * @param {string} containerId - The ID of the container element (e.g. 'file-tree').
+ */
 export async function init(containerId) {
   container = document.getElementById(containerId);
   if (!container) {
     console.warn('[file-browser] Container not found:', containerId);
     return;
+  }
+
+  // Wire up vault change button
+  const changeVaultBtn = document.getElementById('btn-change-vault');
+  if (changeVaultBtn && window.harkva) {
+    changeVaultBtn.addEventListener('click', async () => {
+      const newPath = await window.harkva.selectVault();
+      if (newPath) {
+        await reloadTree();
+        // Update status bar
+        const statusVault = document.getElementById('status-vault');
+        if (statusVault) {
+          const parts = newPath.replace(/\\/g, '/').split('/');
+          statusVault.textContent = parts[parts.length - 1] || newPath;
+        }
+      }
+    });
   }
 
   // Clear any existing content

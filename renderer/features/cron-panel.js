@@ -376,52 +376,13 @@ function injectStyles() {
   const style = document.createElement('style');
   style.id = 'cron-panel-styles';
   style.textContent = `
-    /* ── Toggle switch ────────────────────────────────────── */
-    .toggle-switch {
-      position: relative;
-      display: inline-block;
-      width: 36px;
-      height: 20px;
-      flex-shrink: 0;
-    }
-    .toggle-switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-    .toggle-slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #555;
-      border-radius: 20px;
-      transition: background-color 0.25s;
-    }
-    .toggle-slider::before {
-      content: "";
-      position: absolute;
-      width: 14px;
-      height: 14px;
-      left: 3px;
-      bottom: 3px;
-      background-color: #fff;
-      border-radius: 50%;
-      transition: transform 0.25s;
-    }
-    .toggle-switch input:checked + .toggle-slider {
-      background-color: #E8731A;
-    }
-    .toggle-switch input:checked + .toggle-slider::before {
-      transform: translateX(16px);
-    }
-
     /* ── Cron row ─────────────────────────────────────────── */
     .cron-row {
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border);
       border-radius: 8px;
       margin-bottom: 8px;
       padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.03);
+      background: var(--bg-secondary);
     }
     .cron-row-header {
       display: flex;
@@ -431,13 +392,13 @@ function injectStyles() {
     .cron-schedule {
       flex: 1;
       font-weight: 600;
-      color: #F5A623;
+      color: var(--accent);
       font-size: 0.9rem;
     }
     .cron-expand-btn {
       background: none;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: rgba(255, 255, 255, 0.7);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
       border-radius: 4px;
       padding: 2px 10px;
       cursor: pointer;
@@ -445,13 +406,13 @@ function injectStyles() {
       white-space: nowrap;
     }
     .cron-expand-btn:hover {
-      background: rgba(255, 255, 255, 0.06);
-      color: #fff;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
     }
     .cron-command-summary {
       margin-top: 4px;
       padding-left: 48px;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-secondary);
       font-size: 0.82rem;
       font-family: 'SF Mono', 'Fira Code', monospace;
       overflow: hidden;
@@ -463,21 +424,21 @@ function injectStyles() {
     .cron-detail {
       margin-top: 10px;
       padding: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      border-top: 1px solid var(--border);
     }
     .cron-full-command {
       font-family: 'SF Mono', 'Fira Code', monospace;
       font-size: 0.82rem;
-      color: rgba(255, 255, 255, 0.8);
+      color: var(--text-primary);
       margin-bottom: 8px;
       word-break: break-all;
     }
     .cron-log {
-      background: rgba(0, 0, 0, 0.3);
+      background: var(--bg-tertiary);
       border-radius: 6px;
       padding: 10px;
       font-size: 0.78rem;
-      color: rgba(255, 255, 255, 0.65);
+      color: var(--text-secondary);
       max-height: 200px;
       overflow-y: auto;
       white-space: pre-wrap;
@@ -492,23 +453,23 @@ function injectStyles() {
       justify-content: center;
       gap: 10px;
       padding: 32px 0;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-secondary);
     }
     .cron-spinner {
       width: 20px;
       height: 20px;
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      border-top-color: #E8731A;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: cron-spin 0.7s linear infinite;
     }
     @keyframes cron-spin {
       to { transform: rotate(360deg); }
     }
-    .cron-empty {
+    #cron-list .cron-empty {
       text-align: center;
       padding: 32px 0;
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--text-secondary);
       font-size: 0.9rem;
     }
   `;

@@ -129,7 +129,14 @@ function handleSend() {
   showTypingIndicator();
 
   if (window.harkva && typeof window.harkva.sendToClaude === 'function') {
-    window.harkva.sendToClaude(text);
+    console.log('[chat] Sending to Claude:', text);
+    window.harkva.sendToClaude(text).then(() => {
+      console.log('[chat] sendToClaude resolved');
+    }).catch((err) => {
+      console.error('[chat] sendToClaude error:', err);
+    });
+  } else {
+    console.error('[chat] window.harkva.sendToClaude not available');
   }
 }
 
@@ -250,13 +257,18 @@ export function init() {
   btnNewChat = document.getElementById('btn-new-chat');
   agentNameEl = document.getElementById('chat-agent-name');
 
+  console.log('[chat] init: messagesContainer=', !!messagesContainer, 'chatInput=', !!chatInput, 'btnSend=', !!btnSend);
+
   if (!messagesContainer || !chatInput || !btnSend) {
     console.warn('[chat] Missing required DOM elements.');
     return;
   }
 
   // Send on button click
-  btnSend.addEventListener('click', handleSend);
+  btnSend.addEventListener('click', () => {
+    console.log('[chat] Send button clicked');
+    handleSend();
+  });
 
   // New chat button
   if (btnNewChat) {
@@ -266,6 +278,13 @@ export function init() {
   // Listen for Claude response data from the preload bridge
   if (window.harkva && typeof window.harkva.onClaudeResponse === 'function') {
     window.harkva.onClaudeResponse(handleClaudeResponse);
+  }
+
+  // Listen for Claude error events (sent on a separate channel)
+  if (window.harkva && typeof window.harkva.onClaudeError === 'function') {
+    window.harkva.onClaudeError((data) => {
+      handleClaudeResponse({ type: 'error', content: data.content || 'An error occurred.' });
+    });
   }
 
   // Listen for voice transcriptions so they appear as user bubbles

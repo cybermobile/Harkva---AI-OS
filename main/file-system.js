@@ -86,12 +86,9 @@ async function listDir(relativePath = '.') {
     }
 
     if (entry.isDirectory()) {
-      const childRelative = path.join(relativePath, entry.name);
-      const children = await listDir(childRelative);
       directories.push({
         name: entry.name,
         type: 'directory',
-        children,
       });
     } else if (entry.isFile()) {
       files.push({

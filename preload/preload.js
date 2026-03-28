@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('harkva', {
   listAgents: () => ipcRenderer.invoke('list-agents'),
   switchAgent: (botFile) => ipcRenderer.invoke('switch-agent', botFile),
   getActiveAgent: () => ipcRenderer.invoke('get-active-agent'),
+  createAgent: (name, systemPrompt) => ipcRenderer.invoke('create-agent', name, systemPrompt),
+
+  // Menu events
+  onVaultChanged: (cb) => ipcRenderer.on('vault-changed', (_event, path) => cb(path)),
+  onShowCreateAgent: (cb) => ipcRenderer.on('show-create-agent', () => cb()),
 
   // Cron
   listCronJobs: () => ipcRenderer.invoke('list-cron-jobs'),
