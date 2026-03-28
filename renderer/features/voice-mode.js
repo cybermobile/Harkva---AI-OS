@@ -1,12 +1,13 @@
 /**
  * voice-mode.js
- * Voice input/output module for Harkva AI-OS chat panel.
+ * Voice input/output for the Harkva AI-OS chat panel.
  *
- * Provides hands-free interaction with the assistant using the Web Speech API
- * for recognition and synthesis, plus a real-time audio visualizer drawn on a
- * canvas element.
+ * Provides continuous voice recognition via the Web Speech API,
+ * speech synthesis of assistant replies, and a real-time
+ * frequency-bar visualisation of the microphone input on a canvas.
  */
 
+// ── State machine ────────────────────────────────────────────────
 const State = Object.freeze({
   IDLE: 'IDLE',
   LISTENING: 'LISTENING',
@@ -14,14 +15,10 @@ const State = Object.freeze({
   SPEAKING: 'SPEAKING',
 });
 
-let state = State.IDLE;
-let recognition = null;
-let audioCtx = null;
-let analyser = null;
-let mediaStream = null;
-let animFrameId = null;
+let currentState = State.IDLE;
+let voiceActive = false;
 
-// DOM references (resolved once in init)
+// ── DOM handles (resolved once in init) ──────────────────────────
 let toggleBtn = null;
 let textInputArea = null;
 let voiceIndicator = null;
@@ -29,37 +26,44 @@ let voiceCanvas = null;
 let voiceStatus = null;
 let canvasCtx = null;
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ── Web Speech API handles ───────────────────────────────────────
+let recognition = null;
+
+// ── Audio visualisation handles ──────────────────────────────────
+let audioCtx = null;
+let analyser = null;
+let mediaStream = null;
+let animFrameId = null;
+
+// ── Colours for the frequency bars ───────────────────────────────
+const BAR_COLOR_PRIMARY = '#E8731A';
+const BAR_COLOR_SECONDARY = '#F5A623';
+
+// ── Helpers ──────────────────────────────────────────────────────
 
 function setState(next) {
-  state = next;
-  if (toggleBtn) {
-    toggleBtn.dataset.state = next;
-  }
+  currentState = next;
+  if (toggleBtn) toggleBtn.dataset.state = next;
   if (voiceStatus) {
     switch (next) {
       case State.IDLE:
         voiceStatus.textContent = '';
         break;
       case State.LISTENING:
-        voiceStatus.textContent = 'Listening...';
+        voiceStatus.textContent = 'Listening\u2026';
         break;
       case State.PROCESSING:
-        voiceStatus.textContent = 'Processing...';
+        voiceStatus.textContent = 'Processing\u2026';
         break;
       case State.SPEAKING:
-        voiceStatus.textContent = 'Speaking...';
+        voiceStatus.textContent = 'Speaking\u2026';
         break;
     }
   }
 }
 
-function isActive() {
-  return state !== State.IDLE;
-}
-
 /**
- * Strip markdown formatting for cleaner TTS output.
+ * Strip markdown syntax so spoken output sounds natural.
  */
 function stripMarkdown(text) {
   return text
@@ -69,9 +73,9 @@ function stripMarkdown(text) {
     .replace(/`([^`]+)`/g, '$1')
     // Images
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
-    // Links – keep the label text
+    // Links -- keep the label text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    // Bold / italic
+    // Bold / italic markers
     .replace(/(\*{1,3}|_{1,3})(.+?)\1/g, '$2')
     // Strikethrough
     .replace(/~~(.+?)~~/g, '$1')
@@ -85,7 +89,7 @@ function stripMarkdown(text) {
     .replace(/^\s*\d+[.)]\s+/gm, '')
     // Blockquote markers
     .replace(/^\s*>\s?/gm, '')
-    // HTML tags
+    // HTML tags (leftover)
     .replace(/<[^>]+>/g, '')
     // Collapse whitespace
     .replace(/\n{2,}/g, '. ')
@@ -93,96 +97,97 @@ function stripMarkdown(text) {
     .trim();
 }
 
-// ─── audio visualizer ───────────────────────────────────────────────────────
-
-function startVisualizer() {
-  if (!voiceCanvas || !analyser) return;
-  canvasCtx = voiceCanvas.getContext('2d');
-
-  const draw = () => {
-    if (!analyser) return;
-    animFrameId = requestAnimationFrame(draw);
-
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteFrequencyData(dataArray);
-
-    const width = voiceCanvas.width;
-    const height = voiceCanvas.height;
-
-    canvasCtx.clearRect(0, 0, width, height);
-
-    const barCount = Math.min(bufferLength, 64);
-    const barWidth = (width / barCount) * 0.8;
-    const gap = (width / barCount) * 0.2;
-    let x = 0;
-
-    for (let i = 0; i < barCount; i++) {
-      const value = dataArray[i];
-      const barHeight = (value / 255) * height;
-
-      // Gradient between warm orange tones
-      const ratio = value / 255;
-      const r = Math.round(232 + (245 - 232) * ratio); // E8 -> F5
-      const g = Math.round(115 + (166 - 115) * ratio); // 73 -> A6
-      const b = Math.round(26 + (35 - 26) * ratio);    // 1A -> 23
-
-      canvasCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-      canvasCtx.fillRect(x, height - barHeight, barWidth, barHeight);
-
-      x += barWidth + gap;
-    }
-  };
-
-  draw();
+function showTemporaryStatus(msg, duration = 3000) {
+  if (voiceStatus) {
+    voiceStatus.textContent = msg;
+    setTimeout(() => {
+      if (voiceStatus && voiceStatus.textContent === msg) {
+        voiceStatus.textContent = '';
+      }
+    }, duration);
+  }
 }
 
-function stopVisualizer() {
+// ── Audio Visualisation ──────────────────────────────────────────
+
+function drawBars() {
+  if (!analyser || !voiceCanvas || !canvasCtx) return;
+  animFrameId = requestAnimationFrame(drawBars);
+
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteFrequencyData(dataArray);
+
+  const WIDTH = voiceCanvas.width;
+  const HEIGHT = voiceCanvas.height;
+  canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+
+  const barCount = Math.min(bufferLength, 64);
+  const barWidth = (WIDTH / barCount) * 0.8;
+  const gap = (WIDTH / barCount) * 0.2;
+  let x = 0;
+
+  for (let i = 0; i < barCount; i++) {
+    const value = dataArray[i];
+    const barHeight = (value / 255) * HEIGHT;
+
+    // Interpolate between warm orange tones based on amplitude
+    const ratio = value / 255;
+    const r = Math.round(232 + (245 - 232) * ratio); // E8 -> F5
+    const g = Math.round(115 + (166 - 115) * ratio); // 73 -> A6
+    const b = Math.round(26 + (35 - 26) * ratio);    // 1A -> 23
+
+    canvasCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    canvasCtx.fillRect(x, HEIGHT - barHeight, barWidth, barHeight);
+
+    x += barWidth + gap;
+  }
+}
+
+async function startVisualisation() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    console.error('[voice-mode] Microphone access denied:', err);
+    showTemporaryStatus('Microphone access denied');
+    deactivateVoice();
+    return;
+  }
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaStreamSource(mediaStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = 0.8;
+  source.connect(analyser);
+
+  drawBars();
+}
+
+function stopVisualisation() {
   if (animFrameId) {
     cancelAnimationFrame(animFrameId);
     animFrameId = null;
-  }
-  if (canvasCtx && voiceCanvas) {
-    canvasCtx.clearRect(0, 0, voiceCanvas.width, voiceCanvas.height);
-  }
-}
-
-// ─── microphone / audio context ─────────────────────────────────────────────
-
-async function acquireMicrophone() {
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioCtx.createMediaStreamSource(mediaStream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    source.connect(analyser);
-    startVisualizer();
-  } catch (err) {
-    console.error('[voice-mode] Microphone access denied:', err);
-    deactivateVoiceMode();
-    showTemporaryStatus('Microphone access denied');
-  }
-}
-
-function releaseMicrophone() {
-  stopVisualizer();
-  if (mediaStream) {
-    mediaStream.getTracks().forEach((t) => t.stop());
-    mediaStream = null;
   }
   if (audioCtx) {
     audioCtx.close().catch(() => {});
     audioCtx = null;
     analyser = null;
   }
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((t) => t.stop());
+    mediaStream = null;
+  }
+  if (canvasCtx && voiceCanvas) {
+    canvasCtx.clearRect(0, 0, voiceCanvas.width, voiceCanvas.height);
+  }
 }
 
-// ─── speech recognition ─────────────────────────────────────────────────────
+// ── Speech Recognition ───────────────────────────────────────────
 
 function createRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     console.error('[voice-mode] SpeechRecognition API not available.');
     showTemporaryStatus('Speech recognition not supported');
@@ -231,11 +236,12 @@ function createRecognition() {
 
   rec.addEventListener('end', () => {
     // Auto-restart if we are still supposed to be listening
-    if (state === State.LISTENING) {
+    if (voiceActive && currentState !== State.SPEAKING) {
       try {
         rec.start();
+        setState(State.LISTENING);
       } catch (_) {
-        // Already started – ignore
+        // Already started -- ignore
       }
     }
   });
@@ -243,8 +249,8 @@ function createRecognition() {
   rec.addEventListener('error', (event) => {
     console.warn('[voice-mode] Recognition error:', event.error);
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-      deactivateVoiceMode();
       showTemporaryStatus('Microphone permission denied');
+      deactivateVoice();
     }
     // For transient errors (network, audio-capture) the 'end' handler will restart
   });
@@ -256,12 +262,12 @@ function startRecognition() {
   if (!recognition) {
     recognition = createRecognition();
   }
-  if (!recognition) return; // unsupported
+  if (!recognition) return;
   try {
     recognition.start();
     setState(State.LISTENING);
   } catch (_) {
-    // Already started – ignore
+    // Already started -- ignore
   }
 }
 
@@ -270,17 +276,17 @@ function stopRecognition() {
     try {
       recognition.stop();
     } catch (_) {
-      // Not started – ignore
+      // Not started -- ignore
     }
   }
 }
 
-// ─── speech synthesis ───────────────────────────────────────────────────────
+// ── Speech Synthesis ─────────────────────────────────────────────
 
-function speak(text) {
+function speakText(rawText) {
   if (!window.speechSynthesis) return;
 
-  const cleaned = stripMarkdown(text);
+  const cleaned = stripMarkdown(rawText);
   if (!cleaned) return;
 
   setState(State.SPEAKING);
@@ -294,14 +300,18 @@ function speak(text) {
   utterance.pitch = 1;
 
   utterance.addEventListener('end', () => {
-    if (isActive()) {
+    if (voiceActive) {
       startRecognition();
+    } else {
+      setState(State.IDLE);
     }
   });
 
   utterance.addEventListener('error', () => {
-    if (isActive()) {
+    if (voiceActive) {
       startRecognition();
+    } else {
+      setState(State.IDLE);
     }
   });
 
@@ -309,46 +319,46 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
-// ─── activate / deactivate ──────────────────────────────────────────────────
+function handleAssistantResponse(event) {
+  if (!voiceActive) return;
+  const text =
+    (event.detail && event.detail.text) ||
+    (event.detail && event.detail.response) ||
+    '';
+  if (text) {
+    speakText(text);
+  }
+}
 
-async function activateVoiceMode() {
+// ── Activate / Deactivate ────────────────────────────────────────
+
+async function activateVoice() {
+  voiceActive = true;
+  if (toggleBtn) toggleBtn.classList.add('active');
   if (textInputArea) textInputArea.style.display = 'none';
   if (voiceIndicator) voiceIndicator.style.display = 'flex';
-  if (toggleBtn) toggleBtn.classList.add('active');
 
-  await acquireMicrophone();
+  await startVisualisation();
   startRecognition();
 }
 
-function deactivateVoiceMode() {
+function deactivateVoice() {
+  voiceActive = false;
   setState(State.IDLE);
 
   stopRecognition();
-  releaseMicrophone();
+  stopVisualisation();
 
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
 
+  if (toggleBtn) toggleBtn.classList.remove('active');
   if (textInputArea) textInputArea.style.display = '';
   if (voiceIndicator) voiceIndicator.style.display = 'none';
-  if (toggleBtn) toggleBtn.classList.remove('active');
 }
 
-// ─── utility ────────────────────────────────────────────────────────────────
-
-function showTemporaryStatus(msg, duration = 3000) {
-  if (voiceStatus) {
-    voiceStatus.textContent = msg;
-    setTimeout(() => {
-      if (voiceStatus && voiceStatus.textContent === msg) {
-        voiceStatus.textContent = '';
-      }
-    }, duration);
-  }
-}
-
-// ─── public init ────────────────────────────────────────────────────────────
+// ── Public init ──────────────────────────────────────────────────
 
 export function init() {
   toggleBtn = document.getElementById('voice-toggle');
@@ -362,35 +372,41 @@ export function init() {
     return;
   }
 
-  // Ensure the indicator starts hidden
+  // Resolve canvas context
+  if (voiceCanvas) {
+    voiceCanvas.width = voiceCanvas.offsetWidth || 300;
+    voiceCanvas.height = voiceCanvas.offsetHeight || 80;
+    canvasCtx = voiceCanvas.getContext('2d');
+  }
+
+  // Ensure indicator starts hidden
   if (voiceIndicator) voiceIndicator.style.display = 'none';
 
   // Toggle on click
   toggleBtn.addEventListener('click', () => {
-    if (isActive()) {
-      deactivateVoiceMode();
+    if (voiceActive) {
+      deactivateVoice();
     } else {
-      activateVoiceMode();
+      activateVoice();
     }
   });
 
   // Listen for completed assistant responses so we can speak them
-  window.addEventListener('assistant-response-complete', (event) => {
-    if (!isActive()) return;
-    const text = event.detail && event.detail.text;
-    if (text) {
-      speak(text);
-    }
-  });
+  window.addEventListener('assistant-response-complete', handleAssistantResponse);
 
   // If a new chat is requested while voice mode is active, stay in voice mode
-  // but cancel any in-progress speech.
+  // but cancel any in-progress speech
   window.addEventListener('new-chat-requested', () => {
-    if (isActive() && window.speechSynthesis) {
+    if (voiceActive && window.speechSynthesis) {
       window.speechSynthesis.cancel();
-      if (state !== State.LISTENING) {
+      if (currentState !== State.LISTENING) {
         startRecognition();
       }
     }
+  });
+
+  // Clean up on window close
+  window.addEventListener('beforeunload', () => {
+    deactivateVoice();
   });
 }
