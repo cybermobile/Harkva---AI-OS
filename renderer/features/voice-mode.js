@@ -162,29 +162,27 @@ async function startVisualisation() {
   analyser.smoothingTimeConstant = 0.8;
   source.connect(analyser);
 
-  // Downsample to 16kHz mono and pipe to STT helper via IPC
+  // Downsample to 16kHz mono via AudioWorklet and pipe to STT helper
   if (window.harkva && typeof window.harkva.sendSTTAudio === 'function') {
-    const targetRate = 16000;
-    const bufferSize = 4096;
-    sttAudioProcessor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+    try {
+      await audioCtx.audioWorklet.addModule('lib/stt-worklet.js');
+      sttAudioProcessor = new AudioWorkletNode(audioCtx, 'stt-processor');
 
-    const ratio = audioCtx.sampleRate / targetRate;
+      sttAudioProcessor.port.onmessage = (event) => {
+        // event.data is an ArrayBuffer of Float32 PCM — send as base64
+        const bytes = new Uint8Array(event.data);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        window.harkva.sendSTTAudio(btoa(binary));
+      };
 
-    sttAudioProcessor.onaudioprocess = (event) => {
-      const inputData = event.inputBuffer.getChannelData(0);
-      const outputLength = Math.floor(inputData.length / ratio);
-      const output = new Float32Array(outputLength);
-
-      for (let i = 0; i < outputLength; i++) {
-        output[i] = inputData[Math.floor(i * ratio)];
-      }
-
-      // Send as ArrayBuffer via IPC
-      window.harkva.sendSTTAudio(Array.from(new Uint8Array(output.buffer)));
-    };
-
-    source.connect(sttAudioProcessor);
-    sttAudioProcessor.connect(audioCtx.destination);
+      source.connect(sttAudioProcessor);
+      // Do NOT connect to destination — avoids speaker feedback
+    } catch (err) {
+      console.warn('[voice-mode] AudioWorklet failed, falling back:', err);
+    }
   }
 
   drawBars();

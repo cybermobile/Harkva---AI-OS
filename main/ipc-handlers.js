@@ -325,8 +325,8 @@ function registerHandlers(mainWindow) {
     return true;
   });
 
-  ipcMain.handle('stt-audio', async (_event, audioData) => {
-    sttBridge.sendAudio(Buffer.from(audioData));
+  ipcMain.handle('stt-audio', async (_event, base64Data) => {
+    sttBridge.sendAudio(Buffer.from(base64Data, 'base64'));
     return true;
   });
 }
