@@ -1,0 +1,20 @@
+{
+  "name": "harkva-ai-os",
+  "version": "0.1.0",
+  "description": "AI Operating System for knowledge workers",
+  "main": "main/index.js",
+  "scripts": {
+    "start": "unset ELECTRON_RUN_AS_NODE && electron .",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  },
+  "dependencies": {
+    "docx": "^9.6.1",
+    "exceljs": "^4.4.0",
+    "marked": "^17.0.5",
+    "pptxgenjs": "^4.0.1"
+  }
+}

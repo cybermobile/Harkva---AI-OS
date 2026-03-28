@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self'; connect-src 'self'">
+  <title>AI-OS</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div class="toolbar-left">
+      <span class="app-title">AI-OS</span>
+    </div>
+    <div class="toolbar-center">
+      <button class="tab-btn active" data-tab="files">Files</button>
+      <button class="tab-btn" data-tab="sessions">Sessions</button>
+    </div>
+    <div class="toolbar-right">
+      <select id="agent-select" title="Switch Agent">
+        <option value="default">Chad</option>
+      </select>
+      <button id="voice-toggle" class="toolbar-btn" title="Voice Mode">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+      <button id="cron-toggle" class="toolbar-btn" title="Cron Jobs">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main content area -->
+  <div id="main-content">
+    <!-- Left panel: File browser -->
+    <div id="file-browser-panel" class="panel">
+      <div class="panel-header">
+        <span>Files</span>
+        <div style="display:flex;gap:4px">
+          <button id="btn-new-file" class="header-btn" title="Create new file">+ New</button>
+          <button id="btn-change-vault" class="header-btn" title="Change vault folder">Vault</button>
+        </div>
+      </div>
+      <div id="file-tree" class="panel-body"></div>
+    </div>
+
+    <!-- Left panel: Sessions (hidden by default) -->
+    <div id="sessions-panel" class="panel" style="display:none">
+      <div class="panel-header">
+        <span>Sessions</span>
+      </div>
+      <div id="sessions-list" class="panel-body"></div>
+    </div>
+
+    <!-- Resizer -->
+    <div class="panel-resizer" data-resize="left"></div>
+
+    <!-- Center panel: Editor -->
+    <div id="editor-panel" class="panel">
+      <div class="panel-header">
+        <span id="editor-filename">No file selected</span>
+        <div id="editor-actions">
+          <button id="btn-edit" class="header-btn" style="display:none">Edit</button>
+          <button id="btn-save" class="header-btn" style="display:none">Save</button>
+        </div>
+      </div>
+      <div id="editor-content" class="panel-body">
+        <div id="markdown-view" class="markdown-body"></div>
+        <textarea id="markdown-edit" style="display:none"></textarea>
+      </div>
+    </div>
+
+    <!-- Resizer -->
+    <div class="panel-resizer" data-resize="right"></div>
+
+    <!-- Right panel: Chat -->
+    <div id="chat-panel" class="panel">
+      <div class="panel-header">
+        <span id="chat-agent-name">Chad</span>
+        <button id="btn-new-chat" class="header-btn">+ New</button>
+      </div>
+      <div id="chat-messages" class="panel-body"></div>
+      <div id="chat-input-area">
+        <div id="voice-indicator" style="display:none">
+          <canvas id="voice-canvas" width="300" height="60"></canvas>
+          <span id="voice-status">Listening...</span>
+        </div>
+        <div id="text-input-area">
+          <textarea id="chat-input" placeholder="Message Chad..." rows="3"></textarea>
+          <button id="btn-send" class="send-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cron panel overlay -->
+  <div id="cron-overlay" class="overlay" style="display:none">
+    <div class="overlay-content">
+      <div class="overlay-header">
+        <h3>Cron Jobs</h3>
+        <button id="cron-close" class="close-btn">&times;</button>
+      </div>
+      <div id="cron-list" class="overlay-body"></div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div id="status-bar">
+    <span id="status-vault">No vault selected</span>
+    <span id="status-agent">Agent: Chad</span>
+    <span id="status-connection">Disconnected</span>
+  </div>
+
+  <script src="lib/marked.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
