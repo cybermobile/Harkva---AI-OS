@@ -1,0 +1,30 @@
+'use strict';
+
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('harkva', {
+  // File system
+  selectVault: () => ipcRenderer.invoke('select-vault'),
+  getVaultPath: () => ipcRenderer.invoke('get-vault-path'),
+  listDir: (relativePath) => ipcRenderer.invoke('list-dir', relativePath),
+  readFile: (relativePath) => ipcRenderer.invoke('read-file', relativePath),
+  writeFile: (relativePath, content) => ipcRenderer.invoke('write-file', relativePath, content),
+
+  // Claude
+  startClaude: () => ipcRenderer.invoke('claude-start'),
+  sendToClaude: (message) => ipcRenderer.invoke('claude-send', message),
+  stopClaude: () => ipcRenderer.invoke('claude-stop'),
+  onClaudeResponse: (cb) => ipcRenderer.on('claude-response', (_event, data) => cb(data)),
+  onClaudeError: (cb) => ipcRenderer.on('claude-error', (_event, data) => cb(data)),
+  onClaudeReady: (cb) => ipcRenderer.on('claude-ready', () => cb()),
+
+  // Agents
+  listAgents: () => ipcRenderer.invoke('list-agents'),
+  switchAgent: (botFile) => ipcRenderer.invoke('switch-agent', botFile),
+  getActiveAgent: () => ipcRenderer.invoke('get-active-agent'),
+
+  // Cron
+  listCronJobs: () => ipcRenderer.invoke('list-cron-jobs'),
+  toggleCronJob: (id, enabled) => ipcRenderer.invoke('toggle-cron-job', id, enabled),
+  getCronLog: (id) => ipcRenderer.invoke('get-cron-log', id),
+});
