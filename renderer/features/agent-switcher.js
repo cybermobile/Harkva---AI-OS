@@ -7,10 +7,13 @@
  * signalling other modules via custom events.
  */
 
+// ── DOM handles ──────────────────────────────────────────────────
 let selectEl = null;
 let chatAgentName = null;
 let statusAgent = null;
 let chatInput = null;
+
+// ── Helpers ──────────────────────────────────────────────────────
 
 /**
  * Derive a friendly display name from a bot filename.
@@ -28,12 +31,12 @@ function displayName(filename) {
  */
 function flashError(message) {
   if (!selectEl) return;
-  const prev = selectEl.title;
+  const prevTitle = selectEl.title;
   selectEl.classList.add('error');
   selectEl.title = message;
   setTimeout(() => {
     selectEl.classList.remove('error');
-    selectEl.title = prev;
+    selectEl.title = prevTitle;
   }, 2000);
 }
 
@@ -45,6 +48,8 @@ function applyAgentUI(name) {
   if (statusAgent) statusAgent.textContent = name;
   if (chatInput) chatInput.placeholder = `Message ${name}...`;
 }
+
+// ── Core logic ───────────────────────────────────────────────────
 
 /**
  * Populate the #agent-select dropdown.
@@ -67,14 +72,18 @@ async function populateAgents() {
       if (Array.isArray(agents)) {
         agents.forEach((agent) => {
           // agent may be a filename string or an object with .filename / .name
-          const filename = typeof agent === 'string' ? agent : agent.filename || agent.name;
+          const filename =
+            typeof agent === 'string'
+              ? agent
+              : agent.filename || agent.name;
           if (!filename) return;
 
           const opt = document.createElement('option');
           opt.value = filename;
-          opt.textContent = typeof agent === 'object' && agent.name
-            ? agent.name
-            : displayName(filename);
+          opt.textContent =
+            typeof agent === 'object' && agent.name
+              ? agent.name
+              : displayName(filename);
           selectEl.appendChild(opt);
         });
       }
@@ -90,7 +99,8 @@ async function populateAgents() {
  */
 async function onAgentChange() {
   const value = selectEl.value;
-  const label = selectEl.options[selectEl.selectedIndex]?.textContent || 'Chad';
+  const label =
+    selectEl.options[selectEl.selectedIndex]?.textContent || 'Chad';
 
   try {
     if (window.harkva && typeof window.harkva.switchAgent === 'function') {
@@ -101,10 +111,12 @@ async function onAgentChange() {
 
     // Notify other modules
     window.dispatchEvent(
-      new CustomEvent('agent-switched', { detail: { agent: label, value } })
+      new CustomEvent('agent-switched', {
+        detail: { name: label, agent: label, value },
+      })
     );
 
-    // Clear the current chat
+    // Clear the current chat for a fresh conversation with the new agent
     window.dispatchEvent(new CustomEvent('new-chat-requested'));
   } catch (err) {
     console.error('[agent-switcher] Failed to switch agent:', err);
@@ -112,7 +124,7 @@ async function onAgentChange() {
   }
 }
 
-// ─── public init ────────────────────────────────────────────────────────────
+// ── Public init ──────────────────────────────────────────────────
 
 export function init() {
   selectEl = document.getElementById('agent-select');
@@ -136,7 +148,9 @@ export function init() {
     const currentValue = selectEl.value;
     populateAgents().then(() => {
       // Try to preserve the previous selection
-      const exists = Array.from(selectEl.options).some((o) => o.value === currentValue);
+      const exists = Array.from(selectEl.options).some(
+        (o) => o.value === currentValue
+      );
       if (exists) {
         selectEl.value = currentValue;
       } else {
