@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, dialog, ipcMain, session } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, session, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const { registerHandlers } = require('./ipc-handlers');
@@ -178,10 +178,18 @@ ipcMain.handle('create-agent', async (_event, name, systemPrompt) => {
 });
 
 app.whenReady().then(async () => {
+  // Request macOS microphone permission at the OS level
+  if (process.platform === 'darwin') {
+    const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+    if (micStatus !== 'granted') {
+      await systemPreferences.askForMediaAccess('microphone');
+    }
+  }
+
   // Grant microphone permission for voice mode (restrict to our app window only)
   const allowedPermissions = ['media', 'audioCapture', 'microphone'];
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const url = webContents.getURL();
+    const url = webContents ? webContents.getURL() : '';
     if (url.startsWith('file://') && allowedPermissions.includes(permission)) {
       callback(true);
     } else {
@@ -190,7 +198,8 @@ app.whenReady().then(async () => {
   });
 
   session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
-    const url = webContents ? webContents.getURL() : '';
+    if (!webContents) return allowedPermissions.includes(permission);
+    const url = webContents.getURL();
     return url.startsWith('file://') && allowedPermissions.includes(permission);
   });
 
