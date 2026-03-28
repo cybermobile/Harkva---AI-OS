@@ -324,6 +324,11 @@ function registerHandlers(mainWindow) {
     sttBridge.stop();
     return true;
   });
+
+  ipcMain.handle('stt-audio', async (_event, audioData) => {
+    sttBridge.sendAudio(Buffer.from(audioData));
+    return true;
+  });
 }
 
 module.exports = { registerHandlers };

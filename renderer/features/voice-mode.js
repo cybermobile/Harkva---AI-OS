@@ -28,6 +28,7 @@ let canvasCtx = null;
 
 // ── Native STT state ────────────────────────────────────────────
 let sttStarted = false;
+let sttAudioProcessor = null;
 
 // ── Audio visualisation handles ──────────────────────────────────
 let audioCtx = null;
@@ -160,6 +161,31 @@ async function startVisualisation() {
   analyser.fftSize = 256;
   analyser.smoothingTimeConstant = 0.8;
   source.connect(analyser);
+
+  // Downsample to 16kHz mono and pipe to STT helper via IPC
+  if (window.harkva && typeof window.harkva.sendSTTAudio === 'function') {
+    const targetRate = 16000;
+    const bufferSize = 4096;
+    sttAudioProcessor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+    const ratio = audioCtx.sampleRate / targetRate;
+
+    sttAudioProcessor.onaudioprocess = (event) => {
+      const inputData = event.inputBuffer.getChannelData(0);
+      const outputLength = Math.floor(inputData.length / ratio);
+      const output = new Float32Array(outputLength);
+
+      for (let i = 0; i < outputLength; i++) {
+        output[i] = inputData[Math.floor(i * ratio)];
+      }
+
+      // Send as ArrayBuffer via IPC
+      window.harkva.sendSTTAudio(Array.from(new Uint8Array(output.buffer)));
+    };
+
+    source.connect(sttAudioProcessor);
+    sttAudioProcessor.connect(audioCtx.destination);
+  }
 
   drawBars();
 }

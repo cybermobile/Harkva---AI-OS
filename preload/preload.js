@@ -48,5 +48,6 @@ contextBridge.exposeInMainWorld('harkva', {
   // Speech-to-text
   startSTT: () => ipcRenderer.invoke('stt-start'),
   stopSTT: () => ipcRenderer.invoke('stt-stop'),
+  sendSTTAudio: (audioData) => ipcRenderer.invoke('stt-audio', audioData),
   onSTTResult: (cb) => ipcRenderer.on('stt-result', (_event, data) => cb(data)),
 });

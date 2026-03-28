@@ -8,30 +8,24 @@ const emitter = new EventEmitter();
 let sttProcess = null;
 let stdoutBuffer = '';
 
-/**
- * Resolve the path to the compiled stt-helper binary.
- */
 function resolveHelperBinary() {
-  // In development, the binary is next to this file
-  const devPath = path.join(__dirname, 'stt-helper');
-  return devPath;
+  return path.join(__dirname, 'stt-helper');
 }
 
 /**
  * Start the native macOS speech-to-text helper process.
+ * Audio is piped via stdin as raw Float32 PCM (mono 16kHz).
  */
 function start() {
   if (sttProcess) return;
 
   const bin = resolveHelperBinary();
-
-  // Strip ELECTRON_RUN_AS_NODE so the subprocess initialises normally
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
 
   sttProcess = spawn(bin, [], {
     env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 
   sttProcess.stdout.on('data', (chunk) => {
@@ -39,7 +33,14 @@ function start() {
     const lines = stdoutBuffer.split('\n');
     stdoutBuffer = lines.pop() || '';
     for (const line of lines) {
-      handleLine(line.trim());
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const parsed = JSON.parse(trimmed);
+        emitter.emit('result', parsed);
+      } catch (_) {
+        // skip non-JSON output
+      }
     }
   });
 
@@ -50,7 +51,7 @@ function start() {
 
   sttProcess.on('error', (err) => {
     console.error('[stt-bridge] Failed to start stt-helper:', err.message);
-    emitter.emit('error', { message: 'Speech-to-text helper not found. Compile stt-helper.swift first.' });
+    emitter.emit('result', { type: 'error', message: 'Speech helper not found. Run: swiftc -o main/stt-helper main/stt-helper.swift -framework Speech -framework AVFoundation' });
     sttProcess = null;
   });
 
@@ -63,33 +64,28 @@ function start() {
 }
 
 /**
- * Stop the speech-to-text helper process.
+ * Send raw Float32 PCM audio data to the helper's stdin.
+ * @param {Buffer} audioBuffer - Raw Float32 PCM data (mono, 16kHz)
  */
+function sendAudio(audioBuffer) {
+  if (sttProcess && sttProcess.stdin && !sttProcess.stdin.destroyed) {
+    sttProcess.stdin.write(audioBuffer);
+  }
+}
+
 function stop() {
   if (!sttProcess) return;
   const proc = sttProcess;
   sttProcess = null;
   stdoutBuffer = '';
-  proc.kill('SIGTERM');
-}
-
-/**
- * Handle a JSON line from the stt-helper process.
- */
-function handleLine(line) {
-  if (!line) return;
-  let parsed;
-  try {
-    parsed = JSON.parse(line);
-  } catch (_) {
-    return;
+  if (proc.stdin && !proc.stdin.destroyed) {
+    proc.stdin.end();
   }
-
-  emitter.emit('result', parsed);
+  proc.kill('SIGTERM');
 }
 
 function isRunning() {
   return sttProcess !== null;
 }
 
-module.exports = { start, stop, isRunning, emitter };
+module.exports = { start, stop, sendAudio, isRunning, emitter };
