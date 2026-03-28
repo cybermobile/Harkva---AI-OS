@@ -267,10 +267,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 3. Init file browser with vault contents
-  await initFileBrowser('file-tree');
+  try { await initFileBrowser('file-tree'); } catch (e) { console.error('INIT FAIL: file-browser', e); }
 
   // 4. Init editor panel
-  initEditor();
+  try { initEditor(); } catch (e) { console.error('INIT FAIL: editor', e); }
 
   // 5. Init chat panel
   initChat();

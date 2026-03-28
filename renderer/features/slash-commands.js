@@ -108,7 +108,7 @@ function hide() {
   visible = false;
   filterText = '';
   activeIndex = 0;
-  menu.style.display = 'none';
+  if (menu) menu.style.display = 'none';
 }
 
 function executeCommand(cmd) {

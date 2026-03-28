@@ -6,12 +6,13 @@
  * a rendered markdown view mode and a raw-text edit mode with save support.
  */
 
-import { attach as _scAttach, detach as _scDetach } from '../features/slash-commands.js';
+const slashCommands = { attach: () => {}, detach: () => {} };
 
-const slashCommands = {
-  attach: typeof _scAttach === 'function' ? _scAttach : () => {},
-  detach: typeof _scDetach === 'function' ? _scDetach : () => {},
-};
+// Load slash commands asynchronously so a failure doesn't break the editor
+import('../features/slash-commands.js').then((mod) => {
+  if (mod.attach) slashCommands.attach = mod.attach;
+  if (mod.detach) slashCommands.detach = mod.detach;
+}).catch(() => {});
 
 let currentPath = null;
 let currentContent = '';
