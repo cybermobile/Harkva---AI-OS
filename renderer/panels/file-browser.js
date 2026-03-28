@@ -10,6 +10,8 @@ let selectedEl = null;
 let selectedPath = null;
 let watchInterval = null;
 let lastRootSnapshot = '';
+let contextMenu = null;
+let searchInput = null;
 
 /**
  * Fetch directory contents from the main process.
@@ -49,6 +51,11 @@ function createFileNode(name, path) {
     selectFile(div, path, name);
   });
 
+  div.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY, path, name, 'file');
+  });
+
   return div;
 }
 
@@ -66,6 +73,12 @@ function createFolderNode(name, path) {
   const childContainer = document.createElement('div');
   childContainer.className = 'folder-children';
   details.appendChild(childContainer);
+
+  summary.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showContextMenu(e.clientX, e.clientY, path, name, 'directory');
+  });
 
   // Re-fetch contents every time the folder is opened
   details.addEventListener('toggle', async () => {
@@ -139,10 +152,134 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-/**
- * Initialise the file browser panel.
- * @param {string} containerId - The ID of the container element (e.g. 'file-tree').
- */
+// ── Context Menu ────────────────────────────────────────────────
+
+function showContextMenu(x, y, targetPath, targetName, targetType) {
+  hideContextMenu();
+
+  contextMenu = document.createElement('div');
+  contextMenu.className = 'context-menu';
+  contextMenu.style.left = x + 'px';
+  contextMenu.style.top = y + 'px';
+
+  const items = [];
+
+  if (targetType === 'directory') {
+    items.push({ label: 'New File Here...', action: () => showNewFileDialog(targetPath) });
+    items.push({ label: 'New Folder...', action: () => promptNewFolder(targetPath) });
+  }
+
+  items.push({ label: 'Rename...', action: () => promptRename(targetPath, targetName) });
+  items.push({ label: 'Delete', action: () => confirmDelete(targetPath, targetName, targetType) });
+
+  for (const item of items) {
+    const el = document.createElement('div');
+    el.className = 'context-menu-item';
+    el.textContent = item.label;
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideContextMenu();
+      item.action();
+    });
+    contextMenu.appendChild(el);
+  }
+
+  document.body.appendChild(contextMenu);
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', hideContextMenu, { once: true });
+  }, 0);
+}
+
+function hideContextMenu() {
+  if (contextMenu) {
+    contextMenu.remove();
+    contextMenu = null;
+  }
+}
+
+async function promptRename(oldPath, oldName) {
+  const newName = prompt('Rename to:', oldName);
+  if (!newName || newName === oldName) return;
+
+  const parentDir = oldPath.includes('/') ? oldPath.substring(0, oldPath.lastIndexOf('/')) : '';
+  const newPath = parentDir ? parentDir + '/' + newName : newName;
+
+  try {
+    await window.harkva.renameFile(oldPath, newPath);
+    await reloadTree();
+  } catch (err) {
+    alert('Rename failed: ' + (err.message || err));
+  }
+}
+
+async function promptNewFolder(parentPath) {
+  const name = prompt('Folder name:');
+  if (!name) return;
+
+  const fullPath = parentPath ? parentPath + '/' + name : name;
+  try {
+    await window.harkva.createDir(fullPath);
+    await reloadTree();
+  } catch (err) {
+    alert('Failed to create folder: ' + (err.message || err));
+  }
+}
+
+async function confirmDelete(targetPath, targetName, targetType) {
+  const what = targetType === 'directory' ? 'folder' : 'file';
+  if (!confirm(`Delete ${what} "${targetName}"? This cannot be undone.`)) return;
+
+  try {
+    await window.harkva.deleteFile(targetPath);
+    if (selectedPath === targetPath) {
+      selectedEl = null;
+      selectedPath = null;
+    }
+    await reloadTree();
+  } catch (err) {
+    alert('Delete failed: ' + (err.message || err));
+  }
+}
+
+// ── Search ──────────────────────────────────────────────────────
+
+async function handleSearch(query) {
+  if (!container) return;
+
+  if (!query) {
+    container.innerHTML = '';
+    await renderTree(container, '');
+    return;
+  }
+
+  try {
+    const results = await window.harkva.searchFiles(query);
+    container.innerHTML = '';
+
+    if (results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No files match "' + query + '"';
+      container.appendChild(empty);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const result of results) {
+      if (result.type === 'file') {
+        fragment.appendChild(createFileNode(result.name, result.path));
+      } else {
+        fragment.appendChild(createFolderNode(result.name, result.path));
+      }
+    }
+    container.appendChild(fragment);
+  } catch (err) {
+    console.error('[file-browser] Search failed:', err);
+  }
+}
+
 /**
  * Reload the file tree from the vault root.
  */
@@ -174,6 +311,16 @@ export async function init(containerId) {
   const refreshFilesBtn = document.getElementById('btn-refresh-files');
   if (refreshFilesBtn) {
     refreshFilesBtn.addEventListener('click', () => reloadTree());
+  }
+
+  // Wire up search input
+  searchInput = document.getElementById('file-search');
+  if (searchInput) {
+    let debounce = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => handleSearch(searchInput.value.trim()), 300);
+    });
   }
 
   // Listen for menu-triggered new file dialog

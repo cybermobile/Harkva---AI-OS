@@ -317,6 +317,15 @@ body {
   color: #fff;
 }
 
+.header-btn.dirty {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.header-btn.save-success {
+  background: var(--success);
+  color: #fff;
+}
+
 /* ============================================================
    File Tree
    ============================================================ */
@@ -390,6 +399,60 @@ body {
 .file-item.selected {
   background: var(--bg-tertiary);
   border-left-color: var(--accent);
+}
+
+/* ── File Search Bar ─────────────────────────────────────── */
+.file-search-bar {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.file-search-bar input {
+  width: 100%;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.file-search-bar input:focus {
+  border-color: var(--accent);
+}
+
+.file-search-bar input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+/* ── Context Menu ────────────────────────────────────────── */
+.context-menu {
+  position: fixed;
+  z-index: 3000;
+  min-width: 160px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(61, 43, 31, 0.18);
+  padding: 4px;
+  overflow: hidden;
+}
+
+.context-menu-item {
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--text-primary);
+  transition: background 0.1s ease;
+}
+
+.context-menu-item:hover {
+  background: var(--bg-tertiary);
 }
 
 /* ============================================================
@@ -479,6 +542,7 @@ body {
 }
 
 .markdown-body pre {
+  position: relative;
   margin: 0 0 0.8em;
   padding: 14px 16px;
   background: var(--bg-secondary);
@@ -628,6 +692,30 @@ body {
   word-break: break-all;
   max-height: 120px;
   overflow-y: auto;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: rgba(61, 43, 31, 0.82);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.markdown-body pre:hover .code-copy-btn,
+.markdown-body pre:focus-within .code-copy-btn {
+  opacity: 1;
+}
+
+.code-copy-btn:hover {
+  background: var(--accent);
 }
 
 /* ----- Typing Indicator ----- */

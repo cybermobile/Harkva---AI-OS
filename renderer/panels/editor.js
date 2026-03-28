@@ -20,6 +20,7 @@ let currentPath = null;
 let currentContent = '';
 let isEditing = false;
 let liveWatchInterval = null;
+let isDirty = false;
 
 // DOM references
 let filenameEl = null;
@@ -27,6 +28,21 @@ let markdownView = null;
 let markdownEdit = null;
 let btnEdit = null;
 let btnSave = null;
+
+function updateDirtyState() {
+  isDirty = isEditing && markdownEdit.value !== currentContent;
+  if (btnSave) btnSave.classList.toggle('dirty', isDirty);
+}
+
+function flashSaveSuccess() {
+  if (!btnSave) return;
+  btnSave.classList.remove('save-success');
+  void btnSave.offsetWidth;
+  btnSave.classList.add('save-success');
+  setTimeout(() => {
+    if (btnSave) btnSave.classList.remove('save-success');
+  }, 1200);
+}
 
 /** File extensions treated as markdown. */
 const MD_EXTENSIONS = new Set(['.md', '.markdown', '.mdown', '.mkd', '.mdx']);
@@ -88,11 +104,13 @@ function renderContent(content, path) {
  */
 function enterViewMode() {
   isEditing = false;
+  isDirty = false;
   slashCommands.detach();
   markdownEdit.style.display = 'none';
   markdownView.style.display = '';
   btnEdit.style.display = '';
   btnSave.style.display = 'none';
+  btnSave.classList.remove('dirty');
   renderContent(currentContent, currentPath);
 }
 
@@ -107,6 +125,7 @@ function enterEditMode() {
   btnEdit.style.display = 'none';
   btnSave.style.display = '';
   slashCommands.attach(markdownEdit);
+  updateDirtyState();
   markdownEdit.focus();
 }
 
@@ -123,7 +142,9 @@ async function saveFile() {
       await window.harkva.writeFile(currentPath, content);
     }
     currentContent = content;
+    isDirty = false;
     enterViewMode();
+    flashSaveSuccess();
   } catch (err) {
     console.error('[editor] Failed to save file:', currentPath, err);
   }
@@ -133,15 +154,24 @@ async function saveFile() {
  * Load and display a file.
  */
 async function loadFile(path, name) {
+  if (isEditing && isDirty) {
+    const shouldDiscard = window.confirm(
+      'You have unsaved changes. Discard them and open a different file?'
+    );
+    if (!shouldDiscard) return;
+  }
+
   currentPath = path;
   filenameEl.textContent = name || path;
 
   // Reset to view mode
   isEditing = false;
+  isDirty = false;
   slashCommands.detach();
   markdownEdit.style.display = 'none';
   markdownView.style.display = '';
   btnSave.style.display = 'none';
+  btnSave.classList.remove('dirty');
 
   // Check if this is an Office file
   const officeInfo = getOfficeInfo(path);
@@ -208,6 +238,7 @@ export function init() {
   // Button handlers
   btnEdit.addEventListener('click', enterEditMode);
   btnSave.addEventListener('click', saveFile);
+  markdownEdit.addEventListener('input', updateDirtyState);
 
   // Listen for file selection from the file browser
   document.addEventListener('file-selected', (event) => {
@@ -303,6 +334,7 @@ export async function reload() {
 
       if (isEditing) {
         markdownEdit.value = currentContent;
+        updateDirtyState();
         // Scroll textarea to changed line
         if (changedLine >= 0) {
           const lineHeight = parseFloat(getComputedStyle(markdownEdit).lineHeight) || 22;

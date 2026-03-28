@@ -66,6 +66,22 @@ function registerHandlers(mainWindow) {
     return true;
   });
 
+  ipcMain.handle('delete-file', async (_event, relativePath) => {
+    return fileSystem.deleteFile(relativePath);
+  });
+
+  ipcMain.handle('rename-file', async (_event, oldPath, newPath) => {
+    return fileSystem.renameFile(oldPath, newPath);
+  });
+
+  ipcMain.handle('create-dir', async (_event, relativePath) => {
+    return fileSystem.createDir(relativePath);
+  });
+
+  ipcMain.handle('search-files', async (_event, query) => {
+    return fileSystem.searchFiles(query);
+  });
+
   // ── Claude ───────────────────────────────────────────────────
 
   function wireClaudeResponse() {

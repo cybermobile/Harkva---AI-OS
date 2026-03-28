@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('harkva', {
   writeFile: (relativePath, content) => ipcRenderer.invoke('write-file', relativePath, content),
   createFile: (relativePath, title) => ipcRenderer.invoke('create-file', relativePath, title),
   openFile: (relativePath) => ipcRenderer.invoke('open-file', relativePath),
+  deleteFile: (relativePath) => ipcRenderer.invoke('delete-file', relativePath),
+  renameFile: (oldPath, newPath) => ipcRenderer.invoke('rename-file', oldPath, newPath),
+  createDir: (relativePath) => ipcRenderer.invoke('create-dir', relativePath),
+  searchFiles: (query) => ipcRenderer.invoke('search-files', query),
 
   // Claude
   startClaude: () => ipcRenderer.invoke('claude-start'),

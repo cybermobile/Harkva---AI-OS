@@ -49,6 +49,9 @@
           <button id="btn-change-vault" class="header-btn" title="Change vault folder">Vault</button>
         </div>
       </div>
+      <div class="file-search-bar">
+        <input id="file-search" type="text" placeholder="Search files..." />
+      </div>
       <div id="file-tree" class="panel-body"></div>
     </div>
 
@@ -85,7 +88,10 @@
     <div id="chat-panel" class="panel">
       <div class="panel-header">
         <span id="chat-agent-name">Chad</span>
-        <button id="btn-new-chat" class="header-btn">+ New</button>
+        <div class="panel-header-actions">
+          <button id="btn-stop-chat" class="header-btn hidden">Stop</button>
+          <button id="btn-new-chat" class="header-btn">+ New</button>
+        </div>
       </div>
       <div id="chat-messages" class="panel-body"></div>
       <div id="chat-input-area">

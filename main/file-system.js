@@ -125,10 +125,90 @@ async function writeFile(relativePath, content) {
   await fs.writeFile(fullPath, content, 'utf-8');
 }
 
+/**
+ * Delete a file or empty directory inside the vault.
+ */
+async function deleteFile(relativePath) {
+  const fullPath = validatePath(relativePath);
+  const stat = await fs.stat(fullPath);
+
+  if (stat.isDirectory()) {
+    await fs.rmdir(fullPath);
+  } else {
+    await fs.unlink(fullPath);
+  }
+}
+
+/**
+ * Rename or move a file/directory within the vault.
+ */
+async function renameFile(oldRelativePath, newRelativePath) {
+  const oldFull = validatePath(oldRelativePath);
+  const newFull = validatePath(newRelativePath);
+
+  // Ensure destination parent exists
+  const destDir = path.dirname(newFull);
+  await fs.mkdir(destDir, { recursive: true });
+
+  await fs.rename(oldFull, newFull);
+}
+
+/**
+ * Create a new directory inside the vault.
+ */
+async function createDir(relativePath) {
+  const fullPath = validatePath(relativePath);
+  await fs.mkdir(fullPath, { recursive: true });
+}
+
+/**
+ * Search for files by name pattern (case-insensitive substring match).
+ * Returns an array of { name, path, type } for matching entries.
+ */
+async function searchFiles(query, relativePath = '') {
+  const fullPath = validatePath(relativePath);
+  const lowerQuery = query.toLowerCase();
+  const results = [];
+
+  async function walk(dir, relDir) {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch (_) {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+
+      const entryRelPath = relDir ? relDir + '/' + entry.name : entry.name;
+
+      if (entry.name.toLowerCase().includes(lowerQuery)) {
+        results.push({
+          name: entry.name,
+          path: entryRelPath,
+          type: entry.isDirectory() ? 'directory' : 'file',
+        });
+      }
+
+      if (entry.isDirectory() && results.length < 100) {
+        await walk(path.join(dir, entry.name), entryRelPath);
+      }
+    }
+  }
+
+  await walk(fullPath, relativePath);
+  return results.slice(0, 100);
+}
+
 module.exports = {
   getVaultPath,
   setVaultPath,
   listDir,
   readFile,
   writeFile,
+  deleteFile,
+  renameFile,
+  createDir,
+  searchFiles,
 };

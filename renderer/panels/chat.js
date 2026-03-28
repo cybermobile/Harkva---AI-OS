@@ -13,12 +13,14 @@ let messages = [];
 let hadToolUse = false;
 let currentAssistantBubble = null;
 let currentAssistantText = '';
-let isWaiting = false;
+let isResponding = false;
+let stopRequested = false;
 
 // DOM references
 let messagesContainer = null;
 let chatInput = null;
 let btnSend = null;
+let btnStop = null;
 let btnNewChat = null;
 let agentNameEl = null;
 
@@ -39,6 +41,62 @@ function renderMarkdown(text) {
     return marked.parse(text);
   }
   return escapeHtml(text);
+}
+
+function updateConnectionStatus(state, label) {
+  const statusConnection = document.getElementById('status-connection');
+  if (!statusConnection) return;
+
+  statusConnection.textContent = label;
+  statusConnection.classList.remove('status-connected', 'status-disconnected');
+
+  if (state === 'connected') {
+    statusConnection.classList.add('status-connected');
+  } else if (state === 'disconnected') {
+    statusConnection.classList.add('status-disconnected');
+  }
+}
+
+function updateResponseControls(active) {
+  isResponding = active;
+  if (btnSend) btnSend.disabled = active;
+  if (btnStop) btnStop.classList.toggle('hidden', !active);
+  if (chatInput) {
+    chatInput.placeholder = active
+      ? 'Waiting for response…'
+      : `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
+  }
+}
+
+function enhanceAssistantContent(container) {
+  if (!container) return;
+
+  container.querySelectorAll('pre').forEach((pre) => {
+    if (pre.querySelector('.code-copy-btn')) return;
+
+    const button = document.createElement('button');
+    button.className = 'code-copy-btn';
+    button.type = 'button';
+    button.textContent = 'Copy';
+    button.addEventListener('click', async () => {
+      const code = pre.querySelector('code');
+      const text = code ? code.textContent || '' : pre.textContent || '';
+
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = 'Copied';
+      } catch (err) {
+        console.warn('[chat] Failed to copy code block:', err);
+        button.textContent = 'Failed';
+      }
+
+      setTimeout(() => {
+        if (button.isConnected) button.textContent = 'Copy';
+      }, 1200);
+    });
+
+    pre.appendChild(button);
+  });
 }
 
 /**
@@ -105,6 +163,7 @@ function createBubble(role, content) {
     const inner = document.createElement('div');
     inner.className = 'markdown-body';
     inner.innerHTML = renderMarkdown(content);
+    enhanceAssistantContent(inner);
     bubble.appendChild(inner);
   } else if (role === 'error') {
     bubble.className = 'chat-bubble error';
@@ -164,9 +223,7 @@ function showTypingIndicator() {
   const indicator = createTypingIndicator();
   messagesContainer.appendChild(indicator);
   scrollToBottom();
-  isWaiting = true;
-  if (btnSend) btnSend.disabled = true;
-  if (chatInput) chatInput.placeholder = 'Waiting for response\u2026';
+  updateResponseControls(true);
 }
 
 /**
@@ -174,7 +231,7 @@ function showTypingIndicator() {
  */
 function handleSend() {
   const text = chatInput.value.trim();
-  if (!text || isWaiting) return;
+  if (!text || isResponding) return;
 
   appendUserMessage(text);
   chatInput.value = '';
@@ -201,12 +258,16 @@ function handleSend() {
 function handleClaudeResponse(data) {
   if (!data || !data.type) return;
 
+  if (stopRequested && (data.type === 'done' || data.type === 'error')) {
+    stopRequested = false;
+    return;
+  }
+
   switch (data.type) {
     case 'text': {
       // First text chunk: remove typing indicator and create assistant bubble
       if (!currentAssistantBubble) {
         removeTypingIndicator();
-        isWaiting = false;
         currentAssistantText = '';
         currentAssistantBubble = document.createElement('div');
         currentAssistantBubble.className = 'chat-bubble assistant';
@@ -221,6 +282,7 @@ function handleClaudeResponse(data) {
       const inner = currentAssistantBubble.querySelector('.markdown-body');
       if (inner) {
         inner.innerHTML = renderMarkdown(currentAssistantText);
+        enhanceAssistantContent(inner);
       }
       scrollToBottom();
       break;
@@ -228,9 +290,8 @@ function handleClaudeResponse(data) {
 
     case 'done': {
       removeTypingIndicator();
-      isWaiting = false;
-      if (btnSend) btnSend.disabled = false;
-      if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
+      updateResponseControls(false);
+      updateConnectionStatus('connected', 'Connected');
 
       // Stop AI glow and live file watching
       document.body.classList.remove('ai-active');
@@ -289,9 +350,8 @@ function handleClaudeResponse(data) {
 
     case 'error': {
       removeTypingIndicator();
-      isWaiting = false;
-      if (btnSend) btnSend.disabled = false;
-      if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
+      updateResponseControls(false);
+      updateConnectionStatus('disconnected', 'Disconnected');
       document.body.classList.remove('ai-active');
       stopLiveWatch();
 
@@ -313,12 +373,8 @@ async function handleNewChat() {
   messages = [];
   currentAssistantBubble = null;
   currentAssistantText = '';
-  isWaiting = false;
-
-  if (btnSend) btnSend.disabled = false;
-  if (chatInput) {
-    chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
-  }
+  stopRequested = false;
+  updateResponseControls(false);
 
   if (messagesContainer) {
     messagesContainer.innerHTML = '';
@@ -342,6 +398,37 @@ async function handleNewChat() {
   }
 }
 
+async function handleStop() {
+  if (!isResponding || !window.harkva || typeof window.harkva.stopClaude !== 'function') {
+    return;
+  }
+
+  stopRequested = true;
+
+  try {
+    await window.harkva.stopClaude();
+  } catch (err) {
+    console.error('[chat] Failed to stop Claude response:', err);
+    stopRequested = false;
+  }
+
+  removeTypingIndicator();
+  updateResponseControls(false);
+  document.body.classList.remove('ai-active');
+  stopLiveWatch();
+
+  if (currentAssistantText) {
+    messages.push({ role: 'assistant', content: currentAssistantText });
+  }
+
+  currentAssistantBubble = null;
+  currentAssistantText = '';
+
+  const stoppedBubble = createBubble('error', 'Response stopped.');
+  messagesContainer.appendChild(stoppedBubble);
+  scrollToBottom();
+}
+
 /**
  * Update the chat input placeholder with the current agent name.
  */
@@ -358,6 +445,7 @@ export function init() {
   messagesContainer = document.getElementById('chat-messages');
   chatInput = document.getElementById('chat-input');
   btnSend = document.getElementById('btn-send');
+  btnStop = document.getElementById('btn-stop-chat');
   btnNewChat = document.getElementById('btn-new-chat');
   agentNameEl = document.getElementById('chat-agent-name');
 
@@ -368,6 +456,9 @@ export function init() {
 
   // Send on button click
   btnSend.addEventListener('click', handleSend);
+  if (btnStop) {
+    btnStop.addEventListener('click', handleStop);
+  }
 
   // New chat button
   if (btnNewChat) {
@@ -393,6 +484,12 @@ export function init() {
     });
   }
 
+  if (window.harkva && typeof window.harkva.onClaudeReady === 'function') {
+    window.harkva.onClaudeReady(() => {
+      updateConnectionStatus('connected', 'Connected');
+    });
+  }
+
   // Listen for voice transcriptions so they appear as user bubbles
   window.addEventListener('voice-message-sent', (event) => {
     const text = event.detail && event.detail.transcript;
@@ -415,7 +512,8 @@ export function init() {
       messages = [];
       currentAssistantBubble = null;
       currentAssistantText = '';
-      isWaiting = false;
+      stopRequested = false;
+      updateResponseControls(false);
       if (messagesContainer) messagesContainer.innerHTML = '';
     }
   });
@@ -429,7 +527,8 @@ export function init() {
     messages = [];
     currentAssistantBubble = null;
     currentAssistantText = '';
-    isWaiting = false;
+    stopRequested = false;
+    updateResponseControls(false);
     if (messagesContainer) messagesContainer.innerHTML = '';
 
     // Render each historical message
@@ -454,4 +553,6 @@ export function init() {
     chatInput.style.height = 'auto';
     chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
   });
+
+  updateResponseControls(false);
 }
