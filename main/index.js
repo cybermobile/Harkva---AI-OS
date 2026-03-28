@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const { registerHandlers } = require('./ipc-handlers');
@@ -178,6 +178,17 @@ ipcMain.handle('create-agent', async (_event, name, systemPrompt) => {
 });
 
 app.whenReady().then(async () => {
+  // Grant microphone permission for voice mode
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    const allowed = ['media', 'audioCapture', 'microphone'];
+    callback(allowed.includes(permission));
+  });
+
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    const allowed = ['media', 'audioCapture', 'microphone'];
+    return allowed.includes(permission);
+  });
+
   buildMenu();
   const win = createWindow();
   registerHandlers(win);
