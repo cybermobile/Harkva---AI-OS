@@ -44,4 +44,9 @@ contextBridge.exposeInMainWorld('harkva', {
   listCronJobs: () => ipcRenderer.invoke('list-cron-jobs'),
   toggleCronJob: (id, enabled) => ipcRenderer.invoke('toggle-cron-job', id, enabled),
   getCronLog: (id) => ipcRenderer.invoke('get-cron-log', id),
+
+  // Speech-to-text
+  startSTT: () => ipcRenderer.invoke('stt-start'),
+  stopSTT: () => ipcRenderer.invoke('stt-stop'),
+  onSTTResult: (cb) => ipcRenderer.on('stt-result', (_event, data) => cb(data)),
 });

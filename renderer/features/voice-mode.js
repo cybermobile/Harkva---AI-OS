@@ -26,8 +26,8 @@ let voiceCanvas = null;
 let voiceStatus = null;
 let canvasCtx = null;
 
-// ── Web Speech API handles ───────────────────────────────────────
-let recognition = null;
+// ── Native STT state ────────────────────────────────────────────
+let sttStarted = false;
 
 // ── Audio visualisation handles ──────────────────────────────────
 let audioCtx = null;
@@ -183,41 +183,25 @@ function stopVisualisation() {
   }
 }
 
-// ── Speech Recognition ───────────────────────────────────────────
+// ── Speech Recognition (native macOS STT via stt-helper) ────────
 
-function createRecognition() {
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    console.error('[voice-mode] SpeechRecognition API not available.');
-    showTemporaryStatus('Speech recognition not supported');
-    return null;
-  }
+function handleSTTResult(data) {
+  if (!voiceActive) return;
+  if (!data || !data.type) return;
 
-  const rec = new SpeechRecognition();
-  rec.continuous = true;
-  rec.interimResults = true;
-  rec.lang = navigator.language || 'en-US';
+  switch (data.type) {
+    case 'ready':
+      setState(State.LISTENING);
+      break;
 
-  rec.addEventListener('result', (event) => {
-    let interimTranscript = '';
-    let finalTranscript = '';
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        finalTranscript += transcript;
-      } else {
-        interimTranscript += transcript;
+    case 'partial':
+      if (voiceStatus && data.text) {
+        voiceStatus.textContent = `Hearing: ${data.text}`;
       }
-    }
+      break;
 
-    if (interimTranscript && voiceStatus) {
-      voiceStatus.textContent = `Hearing: ${interimTranscript}`;
-    }
-
-    if (finalTranscript) {
-      const text = finalTranscript.trim();
+    case 'final': {
+      const text = (data.text || '').trim();
       if (!text) return;
 
       setState(State.PROCESSING);
@@ -231,69 +215,35 @@ function createRecognition() {
       if (window.harkva && typeof window.harkva.sendToClaude === 'function') {
         window.harkva.sendToClaude(text);
       }
+      break;
     }
-  });
 
-  rec.addEventListener('end', () => {
-    // Auto-restart if we are still supposed to be listening
-    if (voiceActive && currentState !== State.SPEAKING) {
-      try {
-        rec.start();
-        setState(State.LISTENING);
-      } catch (_) {
-        // Already started -- ignore
+    case 'error':
+      console.warn('[voice-mode] STT error:', data.message);
+      showTemporaryStatus(data.message || 'Speech recognition error');
+      if (data.message && data.message.includes('permission')) {
+        deactivateVoice();
       }
-    }
-  });
-
-  rec.addEventListener('error', (event) => {
-    console.warn('[voice-mode] Recognition error:', event.error);
-    switch (event.error) {
-      case 'not-allowed':
-      case 'service-not-allowed':
-        showTemporaryStatus('Microphone permission denied');
-        deactivateVoice();
-        break;
-      case 'network':
-        showTemporaryStatus('Speech service unreachable — check network');
-        break;
-      case 'no-speech':
-        showTemporaryStatus('No speech detected — try again');
-        break;
-      case 'audio-capture':
-        showTemporaryStatus('No microphone found');
-        deactivateVoice();
-        break;
-      default:
-        showTemporaryStatus('Voice error: ' + event.error);
-        break;
-    }
-    // For transient errors (network, no-speech) the 'end' handler will restart
-  });
-
-  return rec;
+      break;
+  }
 }
 
 function startRecognition() {
-  if (!recognition) {
-    recognition = createRecognition();
+  if (sttStarted) return;
+  if (!window.harkva || typeof window.harkva.startSTT !== 'function') {
+    showTemporaryStatus('Speech-to-text not available');
+    return;
   }
-  if (!recognition) return;
-  try {
-    recognition.start();
-    setState(State.LISTENING);
-  } catch (_) {
-    // Already started -- ignore
-  }
+  sttStarted = true;
+  window.harkva.startSTT();
+  setState(State.LISTENING);
 }
 
 function stopRecognition() {
-  if (recognition) {
-    try {
-      recognition.stop();
-    } catch (_) {
-      // Not started -- ignore
-    }
+  if (!sttStarted) return;
+  sttStarted = false;
+  if (window.harkva && typeof window.harkva.stopSTT === 'function') {
+    window.harkva.stopSTT();
   }
 }
 
@@ -397,6 +347,11 @@ export function init() {
 
   // Ensure indicator starts hidden
   if (voiceIndicator) voiceIndicator.style.display = 'none';
+
+  // Wire up native STT results from the main process
+  if (window.harkva && typeof window.harkva.onSTTResult === 'function') {
+    window.harkva.onSTTResult(handleSTTResult);
+  }
 
   // Toggle on click
   toggleBtn.addEventListener('click', () => {

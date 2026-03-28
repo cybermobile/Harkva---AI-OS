@@ -8,8 +8,10 @@ const fileSystem = require('./file-system');
 const claudeBridge = require('./claude-bridge');
 const cronManager = require('./cron-manager');
 const officeDocs = require('./office-docs');
+const sttBridge = require('./stt-bridge');
 
 let activeAgent = null;
+let sttWired = false;
 let claudeResponseWired = false;
 
 function titleCase(str) {
@@ -298,6 +300,29 @@ function registerHandlers(mainWindow) {
 
   ipcMain.handle('get-cron-log', async (_event, id) => {
     return cronManager.getCronLog(id);
+  });
+
+  // ── Speech-to-Text ──────────────────────────────────────────────
+
+  function wireSTT() {
+    if (sttWired) return;
+    sttWired = true;
+
+    sttBridge.emitter.on('result', (data) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('stt-result', data);
+    });
+  }
+
+  ipcMain.handle('stt-start', async () => {
+    wireSTT();
+    sttBridge.start();
+    return true;
+  });
+
+  ipcMain.handle('stt-stop', async () => {
+    sttBridge.stop();
+    return true;
   });
 }
 
