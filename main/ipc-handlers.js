@@ -136,8 +136,9 @@ function registerHandlers(mainWindow) {
         }
       }
       return agents;
-    } catch (_) {
-      // bots/ folder may not exist
+    } catch (err) {
+      // bots/ folder may not exist yet
+      if (err.code !== 'ENOENT') console.warn('[ipc] list-agents:', err.message);
       return [];
     }
   });
@@ -195,7 +196,8 @@ function registerHandlers(mainWindow) {
         modified: e.modified,
         gitBranch: e.gitBranch || '',
       }));
-    } catch (_) {
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.warn('[ipc] list-sessions:', err.message);
       return [];
     }
   });
@@ -213,7 +215,7 @@ function registerHandlers(mainWindow) {
       for (const line of raw.split('\n')) {
         if (!line.trim()) continue;
         let parsed;
-        try { parsed = JSON.parse(line); } catch (_) { continue; }
+        try { parsed = JSON.parse(line); } catch (err) { console.warn('[ipc] load-session: skipping malformed JSONL line'); continue; }
 
         if (parsed.type === 'user') {
           const msg = parsed.message;
@@ -241,8 +243,8 @@ function registerHandlers(mainWindow) {
           if (text) messages.push({ role: 'assistant', content: text });
         }
       }
-    } catch (_) {
-      // Session file not found
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.warn('[ipc] load-session:', err.message);
     }
 
     return { sessionId, messages };

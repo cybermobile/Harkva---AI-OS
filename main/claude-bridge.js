@@ -203,19 +203,16 @@ function spawnForMessage(text) {
  * @param {string} [context] - Optional agent personality/context to prepend
  * @param {string} [resumeId] - Optional session ID to resume
  */
-function startSession(vault, context, resumeId) {
-  return new Promise(async (resolve) => {
-    if (activeProcess) {
-      await stopSession();
-    }
+async function startSession(vault, context, resumeId) {
+  if (activeProcess) {
+    await stopSession();
+  }
 
-    vaultPath = vault;
-    agentContext = context || null;
-    sessionId = resumeId || null;
+  vaultPath = vault;
+  agentContext = context || null;
+  sessionId = resumeId || null;
 
-    emitter.emit('ready');
-    resolve();
-  });
+  emitter.emit('ready');
 }
 
 /**

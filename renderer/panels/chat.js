@@ -42,6 +42,25 @@ function renderMarkdown(text) {
 }
 
 /**
+ * Normalise streamed response payloads so malformed JSON does not break chat.
+ */
+function normalizeClaudeResponse(payload) {
+  if (!payload) return null;
+  if (typeof payload === 'string') {
+    try {
+      return JSON.parse(payload);
+    } catch (err) {
+      console.warn('[chat] Failed to parse streamed Claude payload:', err, payload);
+      return {
+        type: 'error',
+        content: 'Received a malformed streaming response.',
+      };
+    }
+  }
+  return payload;
+}
+
+/**
  * Format tool input for display, showing the most relevant info concisely.
  */
 function formatToolInput(toolName, input) {
@@ -357,13 +376,20 @@ export function init() {
 
   // Listen for Claude response data from the preload bridge
   if (window.harkva && typeof window.harkva.onClaudeResponse === 'function') {
-    window.harkva.onClaudeResponse(handleClaudeResponse);
+    window.harkva.onClaudeResponse((data) => {
+      const normalized = normalizeClaudeResponse(data);
+      if (normalized) {
+        handleClaudeResponse(normalized);
+      }
+    });
   }
 
   // Listen for Claude error events (sent on a separate channel)
   if (window.harkva && typeof window.harkva.onClaudeError === 'function') {
     window.harkva.onClaudeError((data) => {
-      handleClaudeResponse({ type: 'error', content: data.content || 'An error occurred.' });
+      const content =
+        data && typeof data === 'object' ? data.content : String(data || 'An error occurred.');
+      handleClaudeResponse({ type: 'error', content });
     });
   }
 

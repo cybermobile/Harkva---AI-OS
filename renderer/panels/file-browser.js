@@ -86,9 +86,7 @@ async function renderTree(parentEl, dirPath) {
 
   if (entries.length === 0) {
     const empty = document.createElement('div');
-    empty.className = 'file-item';
-    empty.style.color = 'var(--text-secondary)';
-    empty.style.fontStyle = 'italic';
+    empty.className = 'file-item empty-folder';
     empty.textContent = 'Empty';
     parentEl.appendChild(empty);
     return;
@@ -171,6 +169,11 @@ export async function init(containerId) {
   const newFileBtn = document.getElementById('btn-new-file');
   if (newFileBtn && window.harkva) {
     newFileBtn.addEventListener('click', () => showNewFileDialog());
+  }
+
+  const refreshFilesBtn = document.getElementById('btn-refresh-files');
+  if (refreshFilesBtn) {
+    refreshFilesBtn.addEventListener('click', () => reloadTree());
   }
 
   // Listen for menu-triggered new file dialog

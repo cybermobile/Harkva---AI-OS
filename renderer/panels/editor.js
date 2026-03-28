@@ -12,7 +12,9 @@ const slashCommands = { attach: () => {}, detach: () => {} };
 import('../features/slash-commands.js').then((mod) => {
   if (mod.attach) slashCommands.attach = mod.attach;
   if (mod.detach) slashCommands.detach = mod.detach;
-}).catch(() => {});
+}).catch((err) => {
+  console.warn('[editor] Failed to load slash commands:', err);
+});
 
 let currentPath = null;
 let currentContent = '';
@@ -311,8 +313,8 @@ export async function reload() {
         scrollToChange(changedLine);
       }
     }
-  } catch (_) {
-    // File may have been deleted
+  } catch (err) {
+    console.warn('[editor] Live reload failed, file may have been deleted:', currentPath, err);
   }
 }
 

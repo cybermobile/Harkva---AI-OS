@@ -189,7 +189,7 @@ function showEmpty() {
 
 function showError(msg) {
   if (!cronList) return;
-  cronList.innerHTML = `<div class="cron-empty" style="color:#e74c3c">${msg || 'Failed to load cron jobs'}</div>`;
+  cronList.innerHTML = `<div class="cron-empty cron-error">${msg || 'Failed to load cron jobs'}</div>`;
 }
 
 function truncate(str, max) {
@@ -265,8 +265,7 @@ function renderJobs(jobs) {
 
     // Detail section (visible when expanded)
     const detail = document.createElement('div');
-    detail.className = 'cron-detail';
-    detail.style.display = isExpanded ? 'block' : 'none';
+    detail.className = 'cron-detail' + (isExpanded ? '' : ' hidden');
 
     const fullCmd = document.createElement('div');
     fullCmd.className = 'cron-full-command';
@@ -307,8 +306,8 @@ async function toggleExpand(id, rowEl, btnEl) {
   const detail = rowEl.querySelector('.cron-detail');
   if (!detail) return;
 
-  const isNowExpanded = detail.style.display === 'none';
-  detail.style.display = isNowExpanded ? 'block' : 'none';
+  const isNowExpanded = detail.classList.contains('hidden');
+  detail.classList.toggle('hidden', !isNowExpanded);
   rowEl.classList.toggle('expanded', isNowExpanded);
   btnEl.textContent = isNowExpanded ? 'Collapse \u25B2' : 'Expand \u25BC';
 
@@ -343,14 +342,14 @@ async function fetchLog(id, logBlock) {
 function openOverlay() {
   if (!cronOverlay) return;
   cronOverlay.classList.add('open');
-  cronOverlay.style.display = 'flex';
+  cronOverlay.classList.remove('hidden');
   loadJobs();
 }
 
 function closeOverlay() {
   if (!cronOverlay) return;
   cronOverlay.classList.remove('open');
-  cronOverlay.style.display = 'none';
+  cronOverlay.classList.add('hidden');
 }
 
 async function loadJobs() {
@@ -368,114 +367,6 @@ async function loadJobs() {
   }
 }
 
-// ── Injected styles ──────────────────────────────────────────────
-
-function injectStyles() {
-  if (document.getElementById('cron-panel-styles')) return;
-
-  const style = document.createElement('style');
-  style.id = 'cron-panel-styles';
-  style.textContent = `
-    /* ── Cron row ─────────────────────────────────────────── */
-    .cron-row {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 8px;
-      padding: 10px 12px;
-      background: var(--bg-secondary);
-    }
-    .cron-row-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .cron-schedule {
-      flex: 1;
-      font-weight: 600;
-      color: var(--accent);
-      font-size: 0.9rem;
-    }
-    .cron-expand-btn {
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--text-secondary);
-      border-radius: 4px;
-      padding: 2px 10px;
-      cursor: pointer;
-      font-size: 0.78rem;
-      white-space: nowrap;
-    }
-    .cron-expand-btn:hover {
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-    }
-    .cron-command-summary {
-      margin-top: 4px;
-      padding-left: 48px;
-      color: var(--text-secondary);
-      font-size: 0.82rem;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    /* ── Expanded detail ──────────────────────────────────── */
-    .cron-detail {
-      margin-top: 10px;
-      padding: 10px;
-      border-top: 1px solid var(--border);
-    }
-    .cron-full-command {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 0.82rem;
-      color: var(--text-primary);
-      margin-bottom: 8px;
-      word-break: break-all;
-    }
-    .cron-log {
-      background: var(--bg-tertiary);
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 0.78rem;
-      color: var(--text-secondary);
-      max-height: 200px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-      margin: 0;
-    }
-
-    /* ── Loading & empty states ────────────────────────────── */
-    .cron-loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 32px 0;
-      color: var(--text-secondary);
-    }
-    .cron-spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: cron-spin 0.7s linear infinite;
-    }
-    @keyframes cron-spin {
-      to { transform: rotate(360deg); }
-    }
-    #cron-list .cron-empty {
-      text-align: center;
-      padding: 32px 0;
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 // ── Public init ──────────────────────────────────────────────────
 
 export function init() {
@@ -485,10 +376,8 @@ export function init() {
   cronList = document.getElementById('cron-list');
   cronRefresh = document.getElementById('cron-refresh');
 
-  injectStyles();
-
   // Ensure overlay starts hidden
-  if (cronOverlay) cronOverlay.style.display = 'none';
+  if (cronOverlay) cronOverlay.classList.add('hidden');
 
   // Open overlay
   if (cronToggle) {

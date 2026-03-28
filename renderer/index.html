@@ -43,8 +43,9 @@
     <div id="file-browser-panel" class="panel">
       <div class="panel-header">
         <span>Files</span>
-        <div style="display:flex;gap:4px">
+        <div class="panel-header-actions">
           <button id="btn-new-file" class="header-btn" title="Create new file">+ New</button>
+          <button id="btn-refresh-files" class="header-btn" title="Refresh file list">Refresh</button>
           <button id="btn-change-vault" class="header-btn" title="Change vault folder">Vault</button>
         </div>
       </div>
@@ -105,11 +106,11 @@
   </div>
 
   <!-- Cron panel overlay -->
-  <div id="cron-overlay" class="overlay" style="display:none">
+  <div id="cron-overlay" class="overlay hidden">
     <div class="overlay-content">
       <div class="overlay-header">
         <h3>Cron Jobs</h3>
-        <div style="display:flex;gap:4px">
+        <div class="panel-header-actions">
           <button id="cron-refresh" class="header-btn" title="Refresh">Refresh</button>
           <button id="cron-close" class="close-btn">&times;</button>
         </div>

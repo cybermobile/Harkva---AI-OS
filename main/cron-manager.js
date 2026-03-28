@@ -70,13 +70,24 @@ function getHumanSchedule(cronExpr) {
 }
 
 /**
+ * Generate a stable ID from schedule + command so IDs survive crontab edits.
+ */
+function stableId(schedule, command) {
+  let hash = 0;
+  const str = `${schedule} ${command}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+/**
  * Parse crontab output into structured job objects.
  */
 function parseCrontab(content) {
   const lines = content.split('\n');
   const jobs = [];
   let pendingDescription = null;
-  let id = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -95,7 +106,7 @@ function parseCrontab(content) {
       const disabledMatch = afterHash.match(CRON_PATTERN);
       if (disabledMatch) {
         jobs.push({
-          id: id++,
+          id: stableId(disabledMatch[1], disabledMatch[2]),
           schedule: disabledMatch[1],
           command: disabledMatch[2],
           enabled: false,
@@ -114,7 +125,7 @@ function parseCrontab(content) {
     const match = trimmed.match(CRON_PATTERN);
     if (match) {
       jobs.push({
-        id: id++,
+        id: stableId(match[1], match[2]),
         schedule: match[1],
         command: match[2],
         enabled: true,
@@ -163,7 +174,6 @@ function toggleCronJob(targetId, enabled) {
       const lines = stdout.split('\n');
       const result = [];
       let pendingDescription = null;
-      let currentId = 0;
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -179,7 +189,8 @@ function toggleCronJob(targetId, enabled) {
           const disabledMatch = afterHash.match(CRON_PATTERN);
 
           if (disabledMatch) {
-            if (currentId === targetId) {
+            const lineId = stableId(disabledMatch[1], disabledMatch[2]);
+            if (lineId === targetId) {
               if (enabled) {
                 // Uncomment the line to enable
                 result.push(afterHash);
@@ -189,7 +200,6 @@ function toggleCronJob(targetId, enabled) {
             } else {
               result.push(line);
             }
-            currentId++;
             pendingDescription = null;
             continue;
           }
@@ -201,7 +211,8 @@ function toggleCronJob(targetId, enabled) {
 
         const match = trimmed.match(CRON_PATTERN);
         if (match) {
-          if (currentId === targetId) {
+          const lineId = stableId(match[1], match[2]);
+          if (lineId === targetId) {
             if (!enabled) {
               // Comment out the line to disable
               result.push(`# ${trimmed}`);
@@ -211,7 +222,6 @@ function toggleCronJob(targetId, enabled) {
           } else {
             result.push(line);
           }
-          currentId++;
           pendingDescription = null;
           continue;
         }
