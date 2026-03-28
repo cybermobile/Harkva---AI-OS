@@ -55,8 +55,6 @@ function resolveClaudeBinary() {
 }
 
 function emitResponse(data) {
-  console.log('[claude-bridge] emitResponse:', data.type, data.content ? data.content.slice(0, 80) : '');
-  console.log('[claude-bridge] responseCallbacks count:', responseCallbacks.length);
   emitter.emit('response', data);
   for (const cb of responseCallbacks) {
     cb(data);
@@ -91,6 +89,9 @@ function handleJsonLine(line) {
         emitResponse({
           type: 'tool_use',
           content: `Using tool: ${block.name}`,
+          toolName: block.name,
+          toolInput: block.input || {},
+          toolId: block.id || '',
         });
       }
     }
@@ -102,6 +103,7 @@ function handleJsonLine(line) {
       emitResponse({ type: 'error', content: parsed.result || 'Unknown error' });
     }
     seenAssistantText = false;
+    if (activeProcess) activeProcess._emittedDone = true;
     emitResponse({ type: 'done', content: '' });
   } else if (parsed.type === 'error') {
     emitResponse({
@@ -123,6 +125,7 @@ function spawnForMessage(text) {
     '--print',
     '--output-format', 'stream-json',
     '--verbose',
+    '--dangerously-skip-permissions',
   ];
 
   // Continue existing conversation if we have a session
@@ -139,12 +142,10 @@ function spawnForMessage(text) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
 
-  console.log('[claude-bridge] Spawning:', claudeBin, args.join(' '));
-
   const proc = spawn(claudeBin, args, {
     cwd: vaultPath,
     env,
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 
   activeProcess = proc;
@@ -159,9 +160,9 @@ function spawnForMessage(text) {
   });
 
   proc.stderr.on('data', (chunk) => {
-    const text = chunk.toString().trim();
-    if (text) {
-      console.error('[claude-bridge stderr]', text);
+    const stderrText = chunk.toString().trim();
+    if (stderrText) {
+      console.error('[claude-bridge stderr]', stderrText);
     }
   });
 
@@ -172,6 +173,8 @@ function spawnForMessage(text) {
     });
     activeProcess = null;
   });
+
+  proc._emittedDone = false;
 
   proc.on('exit', (code) => {
     // Process any remaining buffer
@@ -184,6 +187,10 @@ function spawnForMessage(text) {
         type: 'error',
         content: `Claude CLI exited with code ${code}`,
       });
+    }
+    // Always emit done on exit so the UI unlocks
+    if (!proc._emittedDone && !stoppingIntentionally) {
+      emitResponse({ type: 'done', content: '' });
     }
     stoppingIntentionally = false;
     activeProcess = null;

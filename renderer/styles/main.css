@@ -521,6 +521,40 @@ body {
   border-radius: 8px;
 }
 
+.chat-bubble.tool-use {
+  align-self: flex-start;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-light);
+  border-radius: 8px;
+  max-width: 90%;
+}
+
+.tool-use-header {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tool-use-input {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
 /* ----- Typing Indicator ----- */
 .typing-indicator {
   align-self: flex-start;
@@ -637,6 +671,11 @@ body {
 
 .send-btn:active {
   transform: scale(0.93);
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ============================================================

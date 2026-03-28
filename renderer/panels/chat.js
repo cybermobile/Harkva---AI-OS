@@ -39,6 +39,38 @@ function renderMarkdown(text) {
 }
 
 /**
+ * Format tool input for display, showing the most relevant info concisely.
+ */
+function formatToolInput(toolName, input) {
+  switch (toolName) {
+    case 'Read':
+      return input.file_path || JSON.stringify(input);
+    case 'Edit':
+      return input.file_path || JSON.stringify(input);
+    case 'Write':
+      return input.file_path || JSON.stringify(input);
+    case 'Bash':
+      return input.command || JSON.stringify(input);
+    case 'Glob':
+      return input.pattern || JSON.stringify(input);
+    case 'Grep':
+      return `/${input.pattern || ''}/ ${input.path || ''}`.trim();
+    case 'WebFetch':
+      return input.url || JSON.stringify(input);
+    case 'WebSearch':
+      return input.query || JSON.stringify(input);
+    default: {
+      const entries = Object.entries(input);
+      if (entries.length === 1) return String(entries[0][1]);
+      return entries.map(([k, v]) => {
+        const val = typeof v === 'string' ? v : JSON.stringify(v);
+        return `${k}: ${val.length > 120 ? val.slice(0, 120) + '\u2026' : val}`;
+      }).join('\n');
+    }
+  }
+}
+
+/**
  * Create a chat bubble element.
  */
 function createBubble(role, content) {
@@ -111,6 +143,8 @@ function showTypingIndicator() {
   messagesContainer.appendChild(indicator);
   scrollToBottom();
   isWaiting = true;
+  if (btnSend) btnSend.disabled = true;
+  if (chatInput) chatInput.placeholder = 'Waiting for response\u2026';
 }
 
 /**
@@ -129,14 +163,7 @@ function handleSend() {
   showTypingIndicator();
 
   if (window.harkva && typeof window.harkva.sendToClaude === 'function') {
-    console.log('[chat] Sending to Claude:', text);
-    window.harkva.sendToClaude(text).then(() => {
-      console.log('[chat] sendToClaude resolved');
-    }).catch((err) => {
-      console.error('[chat] sendToClaude error:', err);
-    });
-  } else {
-    console.error('[chat] window.harkva.sendToClaude not available');
+    window.harkva.sendToClaude(text);
   }
 }
 
@@ -174,6 +201,8 @@ function handleClaudeResponse(data) {
     case 'done': {
       removeTypingIndicator();
       isWaiting = false;
+      if (btnSend) btnSend.disabled = false;
+      if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
 
       // Finalise the message
       if (currentAssistantText) {
@@ -192,9 +221,34 @@ function handleClaudeResponse(data) {
       break;
     }
 
+    case 'tool_use': {
+      // Show tool call with its inputs
+      removeTypingIndicator();
+      const toolBubble = document.createElement('div');
+      toolBubble.className = 'chat-bubble tool-use';
+
+      const header = document.createElement('div');
+      header.className = 'tool-use-header';
+      header.textContent = data.toolName || 'Tool';
+      toolBubble.appendChild(header);
+
+      if (data.toolInput && Object.keys(data.toolInput).length > 0) {
+        const inputBlock = document.createElement('pre');
+        inputBlock.className = 'tool-use-input';
+        inputBlock.textContent = formatToolInput(data.toolName, data.toolInput);
+        toolBubble.appendChild(inputBlock);
+      }
+
+      messagesContainer.appendChild(toolBubble);
+      scrollToBottom();
+      break;
+    }
+
     case 'error': {
       removeTypingIndicator();
       isWaiting = false;
+      if (btnSend) btnSend.disabled = false;
+      if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
 
       const errorBubble = createBubble('error', data.content || 'An error occurred.');
       messagesContainer.appendChild(errorBubble);
@@ -257,18 +311,13 @@ export function init() {
   btnNewChat = document.getElementById('btn-new-chat');
   agentNameEl = document.getElementById('chat-agent-name');
 
-  console.log('[chat] init: messagesContainer=', !!messagesContainer, 'chatInput=', !!chatInput, 'btnSend=', !!btnSend);
-
   if (!messagesContainer || !chatInput || !btnSend) {
     console.warn('[chat] Missing required DOM elements.');
     return;
   }
 
   // Send on button click
-  btnSend.addEventListener('click', () => {
-    console.log('[chat] Send button clicked');
-    handleSend();
-  });
+  btnSend.addEventListener('click', handleSend);
 
   // New chat button
   if (btnNewChat) {
@@ -311,6 +360,14 @@ export function init() {
       currentAssistantText = '';
       isWaiting = false;
       if (messagesContainer) messagesContainer.innerHTML = '';
+    }
+  });
+
+  // Enter sends, Shift+Enter adds a newline
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   });
 
