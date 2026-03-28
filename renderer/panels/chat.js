@@ -7,7 +7,10 @@
  * assistant messages.
  */
 
+import { getCurrentPath, reload as reloadEditor, startLiveWatch, stopLiveWatch } from './editor.js';
+
 let messages = [];
+let hadToolUse = false;
 let currentAssistantBubble = null;
 let currentAssistantText = '';
 let isWaiting = false;
@@ -163,7 +166,13 @@ function handleSend() {
   showTypingIndicator();
 
   if (window.harkva && typeof window.harkva.sendToClaude === 'function') {
-    window.harkva.sendToClaude(text);
+    // If a file is open, tell Claude about it so it can edit it
+    const openFile = getCurrentPath();
+    let fullMessage = text;
+    if (openFile) {
+      fullMessage = `[The user currently has the file "${openFile}" open in the editor. If they ask you to edit, modify, or update it, use the Edit or Write tool on that file.]\n\n${text}`;
+    }
+    window.harkva.sendToClaude(fullMessage);
   }
 }
 
@@ -204,8 +213,15 @@ function handleClaudeResponse(data) {
       if (btnSend) btnSend.disabled = false;
       if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
 
-      // Stop AI glow
+      // Stop AI glow and live file watching
       document.body.classList.remove('ai-active');
+      stopLiveWatch();
+
+      // Final reload in case of last-moment changes
+      if (hadToolUse) {
+        hadToolUse = false;
+        reloadEditor();
+      }
 
       // Finalise the message
       if (currentAssistantText) {
@@ -225,8 +241,10 @@ function handleClaudeResponse(data) {
     }
 
     case 'tool_use': {
-      // Activate AI glow while using tools
+      // Activate AI glow while using tools and start live file watching
       document.body.classList.add('ai-active');
+      hadToolUse = true;
+      startLiveWatch();
 
       // Show tool call with its inputs
       removeTypingIndicator();
@@ -256,6 +274,7 @@ function handleClaudeResponse(data) {
       if (btnSend) btnSend.disabled = false;
       if (chatInput) chatInput.placeholder = `Message ${(document.getElementById('chat-agent-name') || {}).textContent || 'Chad'}...`;
       document.body.classList.remove('ai-active');
+      stopLiveWatch();
 
       const errorBubble = createBubble('error', data.content || 'An error occurred.');
       messagesContainer.appendChild(errorBubble);

@@ -1101,12 +1101,12 @@ body {
    ============================================================ */
 @keyframes ai-glow-pulse {
   0%, 100% {
-    box-shadow: inset 0 0 8px rgba(232, 115, 26, 0.3),
-                inset 0 0 20px rgba(245, 166, 35, 0.1);
+    box-shadow: inset 0 0 12px rgba(180, 80, 0, 0.5),
+                inset 0 0 30px rgba(140, 60, 0, 0.2);
   }
   50% {
-    box-shadow: inset 0 0 15px rgba(232, 115, 26, 0.5),
-                inset 0 0 40px rgba(245, 166, 35, 0.15);
+    box-shadow: inset 0 0 25px rgba(180, 80, 0, 0.7),
+                inset 0 0 60px rgba(140, 60, 0, 0.3);
   }
 }
 
@@ -1120,13 +1120,50 @@ body.ai-active::after {
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  border: 2px solid var(--accent);
+  border: 3px solid rgba(180, 80, 0, 0.8);
   border-radius: 0;
-  opacity: 0.6;
   animation: ai-border-pulse 2s ease-in-out infinite;
 }
 
 @keyframes ai-border-pulse {
-  0%, 100% { opacity: 0.3; border-color: var(--accent); }
-  50% { opacity: 0.7; border-color: var(--accent-light); }
+  0%, 100% { opacity: 0.5; border-color: rgba(180, 80, 0, 0.6); }
+  50% { opacity: 1; border-color: rgba(200, 100, 10, 0.9); }
+}
+
+/* Editor panel glow when AI is editing */
+body.ai-active #editor-panel {
+  box-shadow: inset 0 0 30px rgba(180, 80, 0, 0.25),
+              inset 0 0 80px rgba(140, 60, 0, 0.1);
+  animation: ai-editor-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes ai-editor-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 30px rgba(180, 80, 0, 0.25),
+                inset 0 0 80px rgba(140, 60, 0, 0.1);
+  }
+  50% {
+    box-shadow: inset 0 0 50px rgba(180, 80, 0, 0.4),
+                inset 0 0 100px rgba(140, 60, 0, 0.15);
+  }
+}
+
+body.ai-active #editor-panel .panel-header {
+  background: linear-gradient(90deg, var(--bg-secondary) 0%, rgba(180, 80, 0, 0.2) 50%, var(--bg-secondary) 100%);
+  background-size: 200% 100%;
+  animation: ai-header-shimmer 2s ease-in-out infinite;
+}
+
+@keyframes ai-header-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Highlight on newly edited content */
+.ai-edited-highlight {
+  background: rgba(232, 115, 26, 0.15) !important;
+  border-left: 3px solid var(--accent) !important;
+  padding-left: 12px !important;
+  border-radius: 4px;
+  transition: background 1.5s ease-out, border-color 1.5s ease-out;
 }

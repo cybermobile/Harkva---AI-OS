@@ -17,6 +17,7 @@ import('../features/slash-commands.js').then((mod) => {
 let currentPath = null;
 let currentContent = '';
 let isEditing = false;
+let liveWatchInterval = null;
 
 // DOM references
 let filenameEl = null;
@@ -219,5 +220,117 @@ export function init() {
 export function save() {
   if (isEditing && currentPath) {
     saveFile();
+  }
+}
+
+/**
+ * Get the currently open file path (relative to vault), or null.
+ */
+export function getCurrentPath() {
+  return currentPath;
+}
+
+/**
+ * Find the line number where old and new content first differ.
+ */
+function findChangedLine(oldText, newText) {
+  const oldLines = oldText.split('\n');
+  const newLines = newText.split('\n');
+  const len = Math.max(oldLines.length, newLines.length);
+  for (let i = 0; i < len; i++) {
+    if (oldLines[i] !== newLines[i]) return i;
+  }
+  return -1;
+}
+
+/**
+ * Scroll the markdown view so that the element containing the changed line is visible,
+ * and briefly highlight it.
+ */
+function scrollToChange(changedLine) {
+  if (!markdownView || changedLine < 0) return;
+
+  const container = markdownView.parentElement;
+  if (!container) return;
+
+  // Get all block-level children rendered by marked
+  const blocks = markdownView.querySelectorAll('h1,h2,h3,h4,h5,h6,p,pre,ul,ol,table,blockquote,hr,div');
+  if (blocks.length === 0) {
+    // Just scroll to bottom for plain text
+    container.scrollTop = container.scrollHeight;
+    return;
+  }
+
+  // Estimate which block corresponds to the changed line.
+  // Count source lines consumed by each rendered block.
+  let linesSoFar = 0;
+  let targetBlock = blocks[blocks.length - 1]; // default to last
+
+  for (const block of blocks) {
+    const blockLines = (block.textContent || '').split('\n').length;
+    if (linesSoFar + blockLines > changedLine) {
+      targetBlock = block;
+      break;
+    }
+    linesSoFar += blockLines;
+  }
+
+  // Scroll into view
+  targetBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // Highlight effect
+  targetBlock.classList.add('ai-edited-highlight');
+  setTimeout(() => targetBlock.classList.remove('ai-edited-highlight'), 1500);
+}
+
+/**
+ * Reload the currently open file from disk (e.g. after AI edits it).
+ */
+export async function reload() {
+  if (!currentPath) return;
+  const officeInfo = getOfficeInfo(currentPath);
+  if (officeInfo) return; // Can't live-reload binary files
+
+  try {
+    if (window.harkva && typeof window.harkva.readFile === 'function') {
+      const newContent = await window.harkva.readFile(currentPath);
+      if (newContent === currentContent) return; // No change
+
+      const changedLine = findChangedLine(currentContent, newContent);
+      currentContent = newContent;
+
+      if (isEditing) {
+        markdownEdit.value = currentContent;
+        // Scroll textarea to changed line
+        if (changedLine >= 0) {
+          const lineHeight = parseFloat(getComputedStyle(markdownEdit).lineHeight) || 22;
+          markdownEdit.scrollTop = Math.max(0, changedLine * lineHeight - markdownEdit.clientHeight / 2);
+        }
+      } else {
+        renderContent(currentContent, currentPath);
+        scrollToChange(changedLine);
+      }
+    }
+  } catch (_) {
+    // File may have been deleted
+  }
+}
+
+/**
+ * Start polling the open file for changes (called when AI is working).
+ */
+export function startLiveWatch() {
+  stopLiveWatch();
+  if (!currentPath) return;
+  liveWatchInterval = setInterval(() => reload(), 500);
+}
+
+/**
+ * Stop polling.
+ */
+export function stopLiveWatch() {
+  if (liveWatchInterval) {
+    clearInterval(liveWatchInterval);
+    liveWatchInterval = null;
   }
 }
