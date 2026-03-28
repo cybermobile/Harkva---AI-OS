@@ -25,8 +25,8 @@ const COMMANDS = [
   { label: 'Code Block',      icon: '</>',  insert: '```\n\n```',    cursor: -4 },
   { label: 'Inline Code',     icon: '`',   insert: '``',            cursor: -1 },
   { label: 'Horizontal Rule', icon: '―',   insert: '\n---\n',       block: true },
-  { label: 'Link',            icon: '🔗',  insert: '[](url)',        cursor: -6 },
-  { label: 'Image',           icon: '🖼',  insert: '![alt](url)',   cursor: -5 },
+  { label: 'Link',            icon: 'Ln',  insert: '[](url)',        cursor: -6 },
+  { label: 'Image',           icon: 'Img', insert: '![alt](url)',   cursor: -5 },
   {
     label: 'Table',
     icon: '⊞',
@@ -34,7 +34,7 @@ const COMMANDS = [
     block: true,
   },
   { label: 'Divider',         icon: '┄',   insert: '\n***\n',       block: true },
-  { label: 'Callout',         icon: '💡',  insert: '> **Note:** ',  block: true },
+  { label: 'Callout',         icon: '!!',  insert: '> **Note:** ',  block: true },
 ];
 
 function createMenu() {

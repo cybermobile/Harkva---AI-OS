@@ -6,7 +6,12 @@
  * a rendered markdown view mode and a raw-text edit mode with save support.
  */
 
-import { attach as attachSlashCommands, detach as detachSlashCommands } from '../features/slash-commands.js';
+import { attach as _scAttach, detach as _scDetach } from '../features/slash-commands.js';
+
+const slashCommands = {
+  attach: typeof _scAttach === 'function' ? _scAttach : () => {},
+  detach: typeof _scDetach === 'function' ? _scDetach : () => {},
+};
 
 let currentPath = null;
 let currentContent = '';
@@ -79,7 +84,7 @@ function renderContent(content, path) {
  */
 function enterViewMode() {
   isEditing = false;
-  detachSlashCommands();
+  slashCommands.detach();
   markdownEdit.style.display = 'none';
   markdownView.style.display = '';
   btnEdit.style.display = '';
@@ -97,7 +102,7 @@ function enterEditMode() {
   markdownView.style.display = 'none';
   btnEdit.style.display = 'none';
   btnSave.style.display = '';
-  attachSlashCommands(markdownEdit);
+  slashCommands.attach(markdownEdit);
   markdownEdit.focus();
 }
 
@@ -129,7 +134,7 @@ async function loadFile(path, name) {
 
   // Reset to view mode
   isEditing = false;
-  detachSlashCommands();
+  slashCommands.detach();
   markdownEdit.style.display = 'none';
   markdownView.style.display = '';
   btnSave.style.display = 'none';
