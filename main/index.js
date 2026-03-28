@@ -178,15 +178,20 @@ ipcMain.handle('create-agent', async (_event, name, systemPrompt) => {
 });
 
 app.whenReady().then(async () => {
-  // Grant microphone permission for voice mode
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    const allowed = ['media', 'audioCapture', 'microphone'];
-    callback(allowed.includes(permission));
+  // Grant microphone permission for voice mode (restrict to our app window only)
+  const allowedPermissions = ['media', 'audioCapture', 'microphone'];
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const url = webContents.getURL();
+    if (url.startsWith('file://') && allowedPermissions.includes(permission)) {
+      callback(true);
+    } else {
+      callback(false);
+    }
   });
 
-  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
-    const allowed = ['media', 'audioCapture', 'microphone'];
-    return allowed.includes(permission);
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+    const url = webContents ? webContents.getURL() : '';
+    return url.startsWith('file://') && allowedPermissions.includes(permission);
   });
 
   buildMenu();
